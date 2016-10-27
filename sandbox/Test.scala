@@ -1,7 +1,9 @@
-import scalanative.native._, stdlib._, stdio._
+object GVNTest {
 
-object Test {
   def main(args: Array[String]): Unit = {
-    println("Hello, world!")
+    println("a")
+    println("a")
+    println("a")
   }
+
 }
