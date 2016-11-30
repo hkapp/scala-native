@@ -22,7 +22,11 @@ object Driver {
   def apply(config: tools.Config): Driver =
     new Impl(
       Seq(pass.GlobalBoxingElimination,
+          pass.SimplifyUnit,
           pass.DeadCodeElimination,
+          pass.CfChainsSimplification,
+          pass.BasicBlocksFusion,
+          pass.OpportunityTesting,
           pass.GlobalValueNumbering,
           pass.MainInjection,
           pass.ExternHoisting,
