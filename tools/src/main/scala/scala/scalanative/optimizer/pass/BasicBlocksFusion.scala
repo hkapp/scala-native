@@ -4,39 +4,26 @@ package pass
 
 import analysis.ControlFlow
 import analysis.ControlFlow.Block
-import analysis.UseDef
-import analysis.ClassHierarchy.Top
-import analysis.Shows._
 
 import nir._
 import Inst._
-import Shows._
-import util.sh
+import Shows.showInst
 
-class BasicBlocksFusion(implicit fresh: Fresh, top: Top) extends Pass {
+class BasicBlocksFusion extends Pass {
   import BasicBlocksFusion._
-  import Debug._
-
-  private var maxBlocks = 0
-  private var maxRemoved = 0
 
   override def preDefn = {
     case defn: Defn.Define =>
+      val cfg = ControlFlow.Graph(defn.insts)
 
-      val methodName = showGlobal(defn.name).toString
-      Debug.scope = methodName
-
-      val cfg        = ControlFlow.Graph(defn.insts)
-
-      val debugMethod = "@deltablue.BinaryConstraint::chooseMethod_i32_unit"
-      //Debug.verbose = (methodName == debugMethod)
-      Debug.verbose = false
-
-      //println(s"${methodName}")
-
+      /* This is an ugly trick to ensure that there are no unreachable blocks.
+       * This pass is very dependent on that, and does not really require DCE
+       * before it, except for that
+       */
       val noDeadBlocksCode = cfg.map { b =>
         b.label +: b.insts
       }.flatten
+
       val noDeadBlocksCfg = ControlFlow.Graph(noDeadBlocksCode)
 
       val newInsts = fuseBlocks(noDeadBlocksCode, noDeadBlocksCfg)
@@ -44,71 +31,66 @@ class BasicBlocksFusion(implicit fresh: Fresh, top: Top) extends Pass {
       Seq(defn.copy(insts = newInsts))
   }
 
-  def fuseBlocks(insts: Seq[Inst], cfg: ControlFlow.Graph): Seq[Inst] = {
+  private def fuseBlocks(insts: Seq[Inst], cfg: ControlFlow.Graph): Seq[Inst] = {
     val workList = scala.collection.mutable.Stack.empty[Block]
-    val visited = scala.collection.mutable.Set.empty[Block]
-    var result = Seq.empty[Inst]
+    val visited  = scala.collection.mutable.Set.empty[Block]
+    var result   = Seq.empty[Inst]
 
     workList.push(cfg.entry)
-    while(workList.nonEmpty) {
+    while (workList.nonEmpty) {
       val block = workList.pop()
-      visited += block
-      val (addedCode, addedWork) = fusedBlockCode(block, cfg.entry)
-      result ++= addedCode
-      workList.pushAll(addedWork.filterNot(visited))
+
+      if (!visited(block)) {
+        visited += block
+
+        val (addedCode, addedWork) = fusedBlockCode(block, cfg.entry)
+
+        result ++= addedCode
+        workList.pushAll(addedWork)
+      }
     }
 
     result
   }
 
-  def fusedBlockCode(block: Block, entryBlock: Block) : (Seq[Inst], Seq[Block]) = {
+  /* This produces the fused block code, starting from the given block.
+   * It also returns what are the next blocks, because fused blocks can't be
+   * re-processed (it would create multiple definitions for the same variable)
+   */
+  private def fusedBlockCode(block: Block,
+                             entryBlock: Block): (Seq[Inst], Seq[Block]) = {
     val (blockCode, blockCf) = (block.insts.dropRight(1), block.insts.last)
 
-    val (codeEnding, succWork) =
-      if (block.succ.size == 1 && block.succ.head.pred.size == 1 && block.succ.head.name != entryBlock.name) {
-        val nextBlock = block.succ.head
+    val (codeEnding, succWork) = blockCf match {
+      // We only fuse if we have a Jump instruction
+      // All other cases should reduce to a Jump after CfChainsSimplification
+      case Jump(Next.Label(_, args))
+          if (block.succ.size == 1 && block.succ.head.pred.size == 1 && block.succ.head.name != entryBlock.name) =>
+        val nextBlock          = block.succ.head
         val (recCode, recWork) = fusedBlockCode(nextBlock, entryBlock)
-        val paramDef = blockCf match {
-          case Jump(Next.Label(_, args)) =>
-            val params = nextBlock.params.map(_.name)
-            params.zip(args).map { case (param, arg) =>
-              Let(param, Op.Copy(arg))
-            }
+        val params             = nextBlock.params.map(_.name)
 
-          case _ => Seq.empty
+        // Replace the parameters of the fused block with the supplied arguments
+        val paramDef = params.zip(args).map {
+          case (param, arg) =>
+            Let(param, Op.Copy(arg))
         }
 
+        // need to drop the first instruction of recCode, as it is the block label
         (paramDef ++ recCode.tail, recWork)
-      }
-      else {
-        (Seq(blockCf), block.succ)
-      }
 
+      // Any other case can't be fused
+      case _ => (Seq(blockCf), block.succ)
+    }
+
+    // Rebuild the code from the label, followed by the code of the block,
+    // and then the ending (either fusion or normal Cf)
     ((block.label +: blockCode) ++ codeEnding, succWork)
   }
 
 }
 
 object BasicBlocksFusion extends PassCompanion {
-  def apply(config: tools.Config, top: Top) =
-    new BasicBlocksFusion()(top.fresh, top)
-
-  object Debug {
-
-    var verbose = false
-    var scope   = ""
-
-    def showMap[A, B](map: Map[A, B]): String = {
-      map.toList.map {
-        case (k, v) => s"($k -> $v)"
-      }.mkString("\n")
-    }
-
-    private def cfgSize(cfg: ControlFlow.Graph): Int = {
-      cfg.map(_ => 1).sum
-    }
-
-  }
-
-
+  def apply(config: tools.Config, top: analysis.ClassHierarchy.Top) =
+    new BasicBlocksFusion
 }
