@@ -1,0 +1,36 @@
+- for GVN, improve deep equals for copy as well
+~ test various passes placement
+- dominator tree unit tests
+- tests for the optimization passes
+
+- look at Swift and LLVM cf simplification
+
+Swift:
+- propagate/remove basic block input values when all predecessors supply the same argument, or the parameter itself
+- constant fold switch
+- change switch with one case to if ?
+- condition forwarding
+- if a then b else c => in b, we know a is true (if only parent), same for c and for switches
+- could try to simplify jump a(true) , a(b): ..... if b then ..
+
+LLVM:
+- bb-vectorize : has instruction combine in it
+- jump-threading
+- sccp
+- simplifycfg
+  -> eliminate arg for basic block that have a single predecessor (subsumed by propagating same args)
+  -> remove if a then b else c ; b: if a then d else e => if a then d else c
+
+~~ This should be simplifiable: ~~
+%src.55:
+    %src.67 = method %src.53: class @java.nio.charset.CoderResult, @java.nio.charset.CoderResult::isUnmappable_bool
+    %src.68 = call[(class @java.nio.charset.CoderResult) => bool] %src.67: ptr(%src.53: class @java.nio.charset.CoderResult)
+    if %src.68: bool then %src.65 else %src.66
+  %src.65:
+    %src.70 = method %src.6: class @java.nio.charset.CharsetDecoder, @java.nio.charset.CharsetDecoder::unmappableCharacterAction_class.java.nio.charset.CodingErrorAction
+    %src.71 = call[(class @java.nio.charset.CharsetDecoder) => class @java.nio.charset.CodingErrorAction] %src.70: ptr(%src.6: class @java.nio.charset.CharsetDecoder)
+    jump %src.69(%src.71: class @java.nio.charset.CodingErrorAction)
+  %src.66:
+    %src.72 = method %src.6: class @java.nio.charset.CharsetDecoder, @java.nio.charset.CharsetDecoder::malformedInputAction_class.java.nio.charset.CodingErrorAction
+    %src.73 = call[(class @java.nio.charset.CharsetDecoder) => class @java.nio.charset.CodingErrorAction] %src.72: ptr(%src.6: class @java.nio.charset.CharsetDecoder)
+    jump %src.69(%src.73: class @java.nio.charset.CodingErrorAction)

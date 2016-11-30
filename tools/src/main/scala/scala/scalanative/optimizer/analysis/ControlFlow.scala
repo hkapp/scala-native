@@ -19,8 +19,8 @@ object ControlFlow {
     val inEdges  = mutable.UnrolledBuffer.empty[Edge]
     val outEdges = mutable.UnrolledBuffer.empty[Edge]
 
-    def pred = inEdges.map(_.from)
-    def succ = outEdges.map(_.to)
+    def pred: Seq[Block] = inEdges.map(_.from)
+    def succ: Seq[Block] = outEdges.map(_.to)
 
     def label = Inst.Label(name, params)
   }
