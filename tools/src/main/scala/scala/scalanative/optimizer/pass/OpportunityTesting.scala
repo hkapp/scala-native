@@ -80,7 +80,8 @@ class OpportunityTesting(implicit top: Top) extends Pass {
 }
 
 object OpportunityTesting extends PassCompanion {
-  def apply(ctx: Ctx) = new OpportunityTesting()(ctx.top)
+  def apply(config: tools.Config, top: Top) =
+    new OpportunityTesting()(top)
 
   trait Opportunity {
 

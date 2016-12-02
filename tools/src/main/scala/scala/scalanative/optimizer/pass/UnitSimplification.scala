@@ -151,7 +151,8 @@ class SimplifyUnit(implicit top: Top) extends Pass {
 }
 
 object SimplifyUnit extends PassCompanion {
-  def apply(ctx: Ctx) = new SimplifyUnit()(ctx.top)
+  def apply(config: tools.Config, top: Top) =
+    new SimplifyUnit()(top)
 
   object Debug {
 
