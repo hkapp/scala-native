@@ -178,7 +178,8 @@ class CfChainsSimplification(implicit fresh: Fresh, top: Top) extends Pass {
 }
 
 object CfChainsSimplification extends PassCompanion {
-  def apply(ctx: Ctx) = new CfChainsSimplification()(ctx.fresh, ctx.top)
+  def apply(config: tools.Config, top: Top) =
+    new CfChainsSimplification()(top.fresh, top)
 
   class ArgumentReplacer(evaluation: Map[Local, Val]) extends Pass {
 

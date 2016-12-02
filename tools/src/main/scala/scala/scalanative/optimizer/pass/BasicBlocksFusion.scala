@@ -90,7 +90,8 @@ class BasicBlocksFusion(implicit fresh: Fresh, top: Top) extends Pass {
 }
 
 object BasicBlocksFusion extends PassCompanion {
-  def apply(ctx: Ctx) = new BasicBlocksFusion()(ctx.fresh, ctx.top)
+  def apply(config: tools.Config, top: Top) =
+    new BasicBlocksFusion()(top.fresh, top)
 
   object Debug {
 
