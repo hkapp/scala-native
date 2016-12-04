@@ -61,28 +61,32 @@ class BasicBlocksFusion(implicit fresh: Fresh, top: Top) extends Pass {
     result
   }
 
-  def fusedBlockCode(block: Block, entryBlock: Block) : (Seq[Inst], Seq[Block]) = {
+  private def fusedBlockCode(block: Block, entryBlock: Block) : (Seq[Inst], Seq[Block]) = {
     val (blockCode, blockCf) = (block.insts.dropRight(1), block.insts.last)
 
-    val (codeEnding, succWork) =
-      if (block.succ.size == 1 && block.succ.head.pred.size == 1 && block.succ.head.name != entryBlock.name) {
+    val (codeEnding, succWork) = blockCf match {
+      // we only fuse if we have a Jump
+      // all other cases should reduce to a Jump
+      // after CfChainsSimplification
+      case Jump(Next.Label(_, args))
+        if (block.succ.size == 1 && block.succ.head.pred.size == 1 && block.succ.head.name != entryBlock.name) =>
+
         val nextBlock = block.succ.head
         val (recCode, recWork) = fusedBlockCode(nextBlock, entryBlock)
-        val paramDef = blockCf match {
-          case Jump(Next.Label(_, args)) =>
-            val params = nextBlock.params.map(_.name)
-            params.zip(args).map { case (param, arg) =>
-              Let(param, Op.Copy(arg))
-            }
-
-          case _ => Seq.empty
+        val params = nextBlock.params.map(_.name)
+        val paramDef = params.zip(args).map { case (param, arg) =>
+          Let(param, Op.Copy(arg))
         }
-
         (paramDef ++ recCode.tail, recWork)
-      }
-      else {
-        (Seq(blockCf), block.succ)
-      }
+
+      // any other case can't be fused
+      case _ => (Seq(blockCf), block.succ)
+    }
+
+      //}
+      //else {
+        //(Seq(blockCf), block.succ)
+      //}
 
     ((block.label +: blockCode) ++ codeEnding, succWork)
   }
