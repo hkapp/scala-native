@@ -26,6 +26,7 @@ object Driver {
           pass.DeadCodeElimination,
           pass.CfChainsSimplification,
           pass.BasicBlocksFusion,
+          pass.BlockParamReduction,
           pass.OpportunityTesting,
           pass.GlobalValueNumbering,
           pass.MainInjection,

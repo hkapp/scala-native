@@ -103,7 +103,7 @@ object OpportunityTesting extends PassCompanion {
   )
 
   val oppVerbose = Map(
-    "SameSuppliedArgs" -> false,
+    "SameSuppliedArgs" -> true,
     "ConstantSwitch" -> false,
     "IfSwitch" -> false,
     "SinglePredArgs" -> false,
