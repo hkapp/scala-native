@@ -76,18 +76,26 @@ class BlockParamReduction(implicit top: Top) extends Pass {
 
   private def reduceAllParams(cfg: ControlFlow.Graph, suppliedArgs: Map[Local, Seq[Set[Val]]]): Map[Local, Seq[Option[Val]]] = {
     cfg.all.map { b =>
-      (b.name -> reduceParams(b, suppliedArgs))
+      if (b.name == cfg.entry.name)
+        (b.name -> Seq.fill(b.params.size)(scala.None))
+      else
+        (b.name -> reduceParams(b, suppliedArgs))
     }.toMap
   }
 
   private def reduceParams(block: Block, suppliedArgs: Map[Local, Seq[Set[Val]]]): Seq[Option[Val]] = {
-    block.params.zip(suppliedArgs(block.name)).map {
-      case (param, argValues) =>
-        val noRecArgs = argValues - param
-        if (noRecArgs.size == 1)
-          Some(noRecArgs.head)
-        else
-          scala.None
+    suppliedArgs.get(block.name) match {
+      case Some(args) =>
+        block.params.zip(args).map {
+          case (param, argValues) =>
+            val noRecArgs = argValues - param
+            if (noRecArgs.size == 1)
+              Some(noRecArgs.head)
+            else
+              scala.None
+        }
+
+      case scala.None => Seq.fill(block.params.size)(scala.None)
     }
   }
 

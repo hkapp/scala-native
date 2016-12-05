@@ -2,6 +2,11 @@
 ~ test various passes placement
 - dominator tree unit tests
 - tests for the optimization passes
+- improve DCE with preNext
+- inst combine
+- canonicalize
+- codebase compilation
+- same arg reduce
 
 - look at Swift and LLVM cf simplification
 
