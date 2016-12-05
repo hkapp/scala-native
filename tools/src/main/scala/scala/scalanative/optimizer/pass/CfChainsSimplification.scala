@@ -64,12 +64,21 @@ class CfChainsSimplification(implicit fresh: Fresh, top: Top) extends Pass {
         targetBlock.insts match {
 
           case Seq(nextCf: Cf) =>
-            val nextBlockArgNames = targetBlock.params.map(_.name)
-            val usedef = UseDef(cfg)
-            val canSkip = nextBlockArgNames.forall(arg => usedef(arg).uses.size <= 1) // should be change to more complex checks, i.e. variable doesn't get out of its block
+            val nextBlockParams = targetBlock.params.map(_.name)
+            val usedef          = UseDef(cfg)
+
+            /* Ensures that the parameters of the target block are only used locally.
+             * If this is not the case, this parameter has to be defined, and can't be ignored
+             * This test is enough because we know there is only one instruction,
+             * which is a Cf
+             */
+            val canSkip = nextBlockParams.forall { param =>
+              val paramUses = usedef(param).uses.toSeq.map(_.name)
+              paramUses == Seq(targetName) || paramUses == Seq.empty
+            }
 
             if (canSkip) {
-              val evaluation = nextBlockArgNames.zip(args).toMap
+              val evaluation   = nextBlockParams.zip(args).toMap
               //println(s"In ${Debug.scope}:")
               //println(showMap(evaluation.map{case (l, v) => (showLocal(l), showVal(v)) }))
               //replaceInstVals(nextCf, evaluation)
