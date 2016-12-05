@@ -1,14 +1,22 @@
-- for GVN, improve deep equals for copy as well
+- improve DCE with preNext
+- codebase compilation
+- same arg reduce
+- canonicalize
+- inst combine
 ~ test various passes placement
 - dominator tree unit tests
 - tests for the optimization passes
-- improve DCE with preNext
-- inst combine
-- canonicalize
-- codebase compilation
-- same arg reduce
+
+x for GVN, improve deep equals for copy as well -> dropped
 
 - look at Swift and LLVM cf simplification
+
+- InstCombine patterns:
+ > a = xor true, b; if a then c else d => if b then d else c (still need to keep the xor, cleaned up by DCE)
+ > same with select
+ > %src.24 = imul[i32] %src.23: i32, 2i32
+ > %tx.65 = select %tx.2496: bool, true, false
+ > select with same two operands
 
 Swift:
 - propagate/remove basic block input values when all predecessors supply the same argument, or the parameter itself
@@ -39,3 +47,37 @@ LLVM:
     %src.72 = method %src.6: class @java.nio.charset.CharsetDecoder, @java.nio.charset.CharsetDecoder::malformedInputAction_class.java.nio.charset.CodingErrorAction
     %src.73 = call[(class @java.nio.charset.CharsetDecoder) => class @java.nio.charset.CodingErrorAction] %src.72: ptr(%src.6: class @java.nio.charset.CharsetDecoder)
     jump %src.69(%src.73: class @java.nio.charset.CodingErrorAction)
+
+=====
+
+This is a bug !
+
+override(@deltablue.Constraint::inputsKnown_i32_bool) def @deltablue.BinaryConstraint::inputsKnown_i32_bool : (class @deltablue.BinaryConstraint, i32) => bool {
+  %src.2(%src.0: class @deltablue.BinaryConstraint, %src.1: i32):
+    %src.3 = method %src.0: class @deltablue.BinaryConstraint, @deltablue.BinaryConstraint::input_class.deltablue.Variable
+    %src.4 = call[(class @deltablue.BinaryConstraint) => class @deltablue.Variable] %src.3: ptr(%src.0: class @deltablue.BinaryConstraint)
+    %src.9 = method %src.4: class @deltablue.Variable, @deltablue.Variable::mark_i32
+    %src.10 = call[(class @deltablue.Variable) => i32] %src.9: ptr(%src.4: class @deltablue.Variable)
+    %src.11 = ieq[i32] %src.10: i32, %src.1: i32
+    if %src.11: bool then %src.16(true) else %src.8
+  %src.8:
+    %src.13 = method %src.4: class @deltablue.Variable, @deltablue.Variable::stay_bool
+    %src.14 = call[(class @deltablue.Variable) => bool] %src.13: ptr(%src.4: class @deltablue.Variable)
+    if %src.14: bool then %src.16(true) else %src.6
+  %src.6:
+    %src.17 = method %src.4: class @deltablue.Variable, @deltablue.Variable::determinedBy_class.deltablue.Constraint
+    %src.18 = call[(class @deltablue.Variable) => class @deltablue.Constraint] %src.17: ptr(%src.4: class @deltablue.Variable)
+    %src.19 = ieq[class @java.lang.Object] %src.18: class @deltablue.Constraint, zero[class @java.lang.Object]
+    if %src.19: bool then %src.20 else %src.21
+  %src.21:
+    %src.24 = method %src.18: class @deltablue.Constraint, @java.lang.Object::equals_class.java.lang.Object_bool
+    %src.25 = call[(class @java.lang.Object, class @java.lang.Object) => bool] %src.24: ptr(%src.18: class @deltablue.Constraint, zero[class @java.lang.Object])
+    ret %src.25: bool
+  %src.20:
+    %src.23 = ieq[class @java.lang.Object] zero[class @java.lang.Object], zero[class @java.lang.Object]
+    ret %src.23: bool
+  %src.16(%src.27: bool):
+    ret %src.27: bool
+  %src.16(%src.27: bool):
+    ret %src.27: bool
+}

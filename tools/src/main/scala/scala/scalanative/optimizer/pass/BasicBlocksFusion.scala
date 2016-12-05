@@ -52,10 +52,13 @@ class BasicBlocksFusion(implicit fresh: Fresh, top: Top) extends Pass {
     workList.push(cfg.entry)
     while(workList.nonEmpty) {
       val block = workList.pop()
-      visited += block
-      val (addedCode, addedWork) = fusedBlockCode(block, cfg.entry)
-      result ++= addedCode
-      workList.pushAll(addedWork.filterNot(visited))
+      if (!visited(block)) {
+        visited += block
+        val (addedCode, addedWork) = fusedBlockCode(block, cfg.entry)
+        result ++= addedCode
+        //workList.pushAll(addedWork.filterNot(visited))
+        workList.pushAll(addedWork)
+      }
     }
 
     result
