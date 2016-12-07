@@ -414,6 +414,11 @@ lazy val codebase =
     //)
     .settings(
       zouzou := {
+        import scala.scalanative.nir.Dep
+        import scala.scalanative.nir.Global
+        import scala.scalanative.nir.Shows
+        import scala.collection.mutable
+
         println("'target' path = " + (target).value)
         val baseDir = baseDirectory.value
         println("baseDir = "+baseDir)
@@ -423,20 +428,79 @@ lazy val codebase =
         val glob = rootFile ** "*.nir"
         val pattern = "scala-2.11/classes/"
 
-        val wholeAssembly = glob.get.take(10).map {f =>
-          //println(f.getAbsolutePath)
+        val deserializerFor = glob.get.take(5).map { f =>
           val classPath = f.getAbsolutePath.split(pattern).last.replace(".nir", "").split("/").mkString(".")
           println("Loading " + classPath)
-
           val buf = rootDir.read(f.toPath)
           val deserializer = new scala.scalanative.nir.serialization.BinaryDeserializer(buf)
-          val top = scala.scalanative.nir.Global.Top(classPath)
-          deserializer.deserialize(top) match {
-            case Some((_, _, topDef)) =>
-              println(scala.scalanative.nir.Shows.showDefn(topDef))
-            case _ => println("No def found !")
+          val top = Global.Top(classPath)
+          (top -> deserializer)
+        }.toMap
+
+        val worklist = mutable.Stack.empty[Global]
+        val loaded = mutable.Set.empty[Global]
+        worklist.pushAll(deserializerFor.keys)
+
+        while(worklist.nonEmpty) {
+          val g = worklist.pop()
+          if (!loaded(g)) {
+            deserializerFor.get(g.top).foreach { deserializer =>
+              deserializer.deserialize(g) match {
+                case Some((deps, _, defn)) =>
+                  println(Shows.showDefn(defn))
+                  deps.foreach {
+                    case Dep.Direct(depg) => worklist.push(depg)
+                    case Dep.Conditional(depg, _) => worklist.push(depg)
+                  }
+                case _ => println("No def found for " + Shows.showGlobal(g))
+              }
+            }
+            loaded += g
           }
         }
+
+        //val wholeAssembly = glob.get.take(5).map {f =>
+          ////println(f.getAbsolutePath)
+          //val classPath = f.getAbsolutePath.split(pattern).last.replace(".nir", "").split("/").mkString(".")
+          //println("Loading " + classPath)
+
+          //val buf = rootDir.read(f.toPath)
+          //val deserializer = new scala.scalanative.nir.serialization.BinaryDeserializer(buf)
+          //val top = Global.Top(classPath)
+          ////val worklist = mutable.Stack.empty[Global]
+          ////val loaded = mutable.Set.empty[Global]
+          ////worklist.push(top)
+
+          ////while(worklist.nonEmpty) {
+            ////val next = worklist.pop()
+            ////if (!loaded(next)) {
+              ////deserializer.deserialize(next) match {
+                ////case Some((deps, _, defn)) =>
+                  ////println(Shows.showDefn(defn))
+                  ////deps.foreach {
+                    ////case Dep.Direct(dg) => loadGlobal(dg, "~"+prefix)
+                    ////case Dep.Conditional(dg, _) => loadGlobal(dg, "~"+prefix)
+                  ////}
+                ////case _ => println("No def found for " + Shows.showGlobal)
+              ////}
+
+            ////}
+          ////}
+
+          //def loadGlobal(g: scala.scalanative.nir.Global, prefix: String): Unit = {
+            //deserializer.deserialize(g) match {
+              //case Some((deps, _, topDef)) =>
+                //println(prefix + ">" + scala.scalanative.nir.Shows.showDefn(topDef))
+                //deps.foreach {
+                  //case Dep.Direct(dg) => loadGlobal(dg, "~"+prefix)
+                  //case Dep.Conditional(dg, _) => loadGlobal(dg, "~"+prefix)
+                //}
+              //case _ => println(prefix + "! No def found for " + Shows.showGlobal(g))
+            //}
+          //}
+
+          //loadGlobal(top, "")
+        //}
         //println("baseDirectory = "+(baseDirectory in repo).value)
         //println("sandbox target = "+(target in sandbox).value)
         //println("repo target = "+(target in repo).value)
