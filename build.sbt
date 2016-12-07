@@ -428,36 +428,58 @@ lazy val codebase =
         val glob = rootFile ** "*.nir"
         val pattern = "scala-2.11/classes/"
 
-        val deserializerFor = glob.get.take(5).map { f =>
+        val allGlobalDefs = glob.get.take(5).map { f =>
           val classPath = f.getAbsolutePath.split(pattern).last.replace(".nir", "").split("/").mkString(".")
           println("Loading " + classPath)
           val buf = rootDir.read(f.toPath)
           val deserializer = new scala.scalanative.nir.serialization.BinaryDeserializer(buf)
+          val defns = deserializer.loadAll()
           val top = Global.Top(classPath)
-          (top -> deserializer)
-        }.toMap
 
-        val worklist = mutable.Stack.empty[Global]
-        val loaded = mutable.Set.empty[Global]
-        worklist.pushAll(deserializerFor.keys)
-
-        while(worklist.nonEmpty) {
-          val g = worklist.pop()
-          if (!loaded(g)) {
-            deserializerFor.get(g.top).foreach { deserializer =>
-              deserializer.deserialize(g) match {
-                case Some((deps, _, defn)) =>
-                  println(Shows.showDefn(defn))
-                  deps.foreach {
-                    case Dep.Direct(depg) => worklist.push(depg)
-                    case Dep.Conditional(depg, _) => worklist.push(depg)
-                  }
-                case _ => println("No def found for " + Shows.showGlobal(g))
-              }
-            }
-            loaded += g
-          }
+          (top -> defns)
         }
+
+        allGlobalDefs.foreach {
+          case (g, ds) =>
+            println("===")
+            println(Shows.showGlobal(g))
+            println("===")
+            println(Shows.showDefns(ds))
+        }
+
+        //val deserializerFor = glob.get.take(5).map { f =>
+          //val classPath = f.getAbsolutePath.split(pattern).last.replace(".nir", "").split("/").mkString(".")
+          //println("Loading " + classPath)
+          //val buf = rootDir.read(f.toPath)
+          //val deserializer = new scala.scalanative.nir.serialization.BinaryDeserializer(buf)
+          //val top = Global.Top(classPath)
+          //(top -> deserializer)
+        //}.toMap
+
+        //val worklist = mutable.Stack.empty[Global]
+        //val loaded = mutable.Set.empty[Global]
+        //worklist.pushAll(deserializerFor.keys)
+
+        //while(worklist.nonEmpty) {
+          //val g = worklist.pop()
+          //if (!loaded(g)) {
+            //deserializerFor.get(g.top).foreach { deserializer =>
+              //deserializer.deserialize(g) match {
+                //case Some((deps, _, defn)) =>
+                  //println(Shows.showDefn(defn))
+                  //deps.foreach {
+                    //case Dep.Direct(depg) =>
+                      //worklist.push(depg)
+                    //case Dep.Conditional(depg, cond) =>
+                      //worklist.push(depg)
+                      //worklist.push(cond)
+                  //}
+                //case _ => println("No def found for " + Shows.showGlobal(g))
+              //}
+            //}
+            //loaded += g
+          //}
+        //}
 
         //val wholeAssembly = glob.get.take(5).map {f =>
           ////println(f.getAbsolutePath)
