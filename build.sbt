@@ -374,37 +374,95 @@ lazy val benchmarks =
     )
     .enablePlugins(ScalaNativePlugin)
 
+
+
+lazy val zouzou = taskKey[Unit](
+  "Will compile the whole codebase.")
+
 lazy val codebase =
   project
     .in(file("codebase"))
     .settings(projectSettings)
     .settings(noPublishSettings)
+    //.settings(
+      //sourceGenerators in Compile += Def.task {
+        //println("Full classpath = " + (fullClasspath in Compile).value)
+        //val dir    = sourceDirectory.value
+        //val prefix = dir.getAbsolutePath.split("/").toSeq.dropRight(2).mkString("/") + "/benchmarks/src/main/scala/"
+        //println(">> " + prefix + "\n")
+        //val glob = (dir ** "/../../benchmarks/src/*Benchmark.scala")
+        //println(glob)
+        //val benchmarks = glob.get.map { f =>
+          //println(f)
+          //f.getAbsolutePath
+            //.replace(prefix, "")
+            //.replace(".scala", "")
+            //.split("/")
+            //.mkString(".")
+        //}.filter(_ != "benchmarks.Benchmark")
+          //.mkString("Seq(new ", ", new ", ")")
+        //val file = (sourceManaged in Compile).value / "benchmarks" / "Discover.scala"
+        //IO.write(file,
+                 //s"""
+          //package benchmarks
+          //object Discover {
+            //val discovered: Seq[benchmarks.Benchmark[_]] = $benchmarks
+          //}
+        //""")
+        //Seq(file)
+      //}.taskValue
+    //)
     .settings(
-      sourceGenerators in Compile += Def.task {
-        println("Full classpath = " + (fullClasspath in Compile).value)
-        val dir    = sourceDirectory.value
-        val prefix = dir.getAbsolutePath.split("/").toSeq.dropRight(2).mkString("/") + "/benchmarks/src/main/scala/"
-        println(">> " + prefix + "\n")
-        val glob = (dir ** "/../../benchmarks/src/*Benchmark.scala")
-        println(glob)
-        val benchmarks = glob.get.map { f =>
-          println(f)
-          f.getAbsolutePath
-            .replace(prefix, "")
-            .replace(".scala", "")
-            .split("/")
-            .mkString(".")
-        }.filter(_ != "benchmarks.Benchmark")
-          .mkString("Seq(new ", ", new ", ")")
-        val file = (sourceManaged in Compile).value / "benchmarks" / "Discover.scala"
-        IO.write(file,
-                 s"""
-          package benchmarks
-          object Discover {
-            val discovered: Seq[benchmarks.Benchmark[_]] = $benchmarks
+      zouzou := {
+        println("'target' path = " + (target).value)
+        val baseDir = baseDirectory.value
+        println("baseDir = "+baseDir)
+        val rootPath = baseDir.getAbsolutePath.split("/").dropRight(1).mkString("/")
+        val rootFile = new java.io.File(rootPath)
+        val rootDir = scala.scalanative.io.VirtualDirectory.local(rootFile)
+        val glob = rootFile ** "*.nir"
+        val pattern = "scala-2.11/classes/"
+
+        val wholeAssembly = glob.get.take(10).map {f =>
+          //println(f.getAbsolutePath)
+          val classPath = f.getAbsolutePath.split(pattern).last.replace(".nir", "").split("/").mkString(".")
+          println("Loading " + classPath)
+
+          val buf = rootDir.read(f.toPath)
+          val deserializer = new scala.scalanative.nir.serialization.BinaryDeserializer(buf)
+          val top = scala.scalanative.nir.Global.Top(classPath)
+          deserializer.deserialize(top) match {
+            case Some((_, _, topDef)) =>
+              println(scala.scalanative.nir.Shows.showDefn(topDef))
+            case _ => println("No def found !")
           }
-        """)
-        Seq(file)
-      }.taskValue
+        }
+        //println("baseDirectory = "+(baseDirectory in repo).value)
+        //println("sandbox target = "+(target in sandbox).value)
+        //println("repo target = "+(target in repo).value)
+        //val dir    = sourceDirectory.value
+        //val prefix = dir.getAbsolutePath.split("/").toSeq.dropRight(2).mkString("/") + "/benchmarks/src/main/scala/"
+        //println(">> " + prefix + "\n")
+        //val glob = (dir ** "/../../benchmarks/src/*Benchmark.scala")
+        //println(glob)
+        //val benchmarks = glob.get.map { f =>
+          //println(f)
+          //f.getAbsolutePath
+            //.replace(prefix, "")
+            //.replace(".scala", "")
+            //.split("/")
+            //.mkString(".")
+        //}.filter(_ != "benchmarks.Benchmark")
+          //.mkString("Seq(new ", ", new ", ")")
+        //val file = (sourceManaged in Compile).value / "benchmarks" / "Discover.scala"
+        //IO.write(file,
+                 //s"""
+          //package benchmarks
+          //object Discover {
+            //val discovered: Seq[benchmarks.Benchmark[_]] = $benchmarks
+          //}
+        //""")
+        //Seq(file)
+      }
     )
     .enablePlugins(ScalaNativePlugin)
