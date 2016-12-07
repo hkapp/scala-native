@@ -417,6 +417,7 @@ lazy val codebase =
         import scala.scalanative.nir.Dep
         import scala.scalanative.nir.Global
         import scala.scalanative.nir.Shows
+        import scala.scalanative.optimizer
         import scala.collection.mutable
 
         println("'target' path = " + (target).value)
@@ -428,10 +429,23 @@ lazy val codebase =
         val glob = rootFile ** "*.nir"
         val pattern = "scala-2.11/classes/"
 
-        val allGlobalDefs = glob.get.take(5).map { f =>
+        val forbiddenClasses = Set(
+          "scala.beans.ScalaBeanInfo"
+        )
+
+        val classes = glob.get.map { f =>
           val classPath = f.getAbsolutePath.split(pattern).last.replace(".nir", "").split("/").mkString(".")
+          val filePath = f.toPath
+          (classPath, filePath)
+        }
+
+        val toLoad = classes.filterNot {
+          case (cp, _) => forbiddenClasses.contains(cp)
+        }
+
+        val allGlobalDefs = toLoad.map { case (classPath, filePath) =>
           println("Loading " + classPath)
-          val buf = rootDir.read(f.toPath)
+          val buf = rootDir.read(filePath)
           val deserializer = new scala.scalanative.nir.serialization.BinaryDeserializer(buf)
           val defns = deserializer.loadAll()
           val top = Global.Top(classPath)
@@ -439,13 +453,25 @@ lazy val codebase =
           (top -> defns)
         }
 
-        allGlobalDefs.foreach {
-          case (g, ds) =>
-            println("===")
-            println(Shows.showGlobal(g))
-            println("===")
-            println(Shows.showDefns(ds))
-        }
+        //allGlobalDefs.foreach {
+          //case (g, ds) =>
+            //println("===")
+            //println(Shows.showGlobal(g))
+            //println("===")
+            //println(Shows.showDefns(ds))
+        //}
+
+        val config = scala.scalanative.tools.Config.empty
+        val driver = optimizer.Driver(config)
+        val assembly = allGlobalDefs.flatMap(_._2)
+        val reporter = optimizer.Reporter.empty
+
+        optimizer.Optimizer(
+          config,
+          driver,
+          assembly,
+          reporter
+        )
 
         //val deserializerFor = glob.get.take(5).map { f =>
           //val classPath = f.getAbsolutePath.split(pattern).last.replace(".nir", "").split("/").mkString(".")
