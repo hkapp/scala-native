@@ -106,7 +106,7 @@ object OpportunityTesting extends PassCompanion {
     "SameSuppliedArgs" -> false,
     "ConstantSwitch" -> true,
     "IfSwitch" -> true,
-    "SinglePredArgs" -> true,
+    "SinglePredArgs" -> false,
     "SameCondIf" -> true
   )
 

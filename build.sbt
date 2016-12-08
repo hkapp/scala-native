@@ -384,34 +384,6 @@ lazy val codebase =
     .in(file("codebase"))
     .settings(projectSettings)
     .settings(noPublishSettings)
-    //.settings(
-      //sourceGenerators in Compile += Def.task {
-        //println("Full classpath = " + (fullClasspath in Compile).value)
-        //val dir    = sourceDirectory.value
-        //val prefix = dir.getAbsolutePath.split("/").toSeq.dropRight(2).mkString("/") + "/benchmarks/src/main/scala/"
-        //println(">> " + prefix + "\n")
-        //val glob = (dir ** "/../../benchmarks/src/*Benchmark.scala")
-        //println(glob)
-        //val benchmarks = glob.get.map { f =>
-          //println(f)
-          //f.getAbsolutePath
-            //.replace(prefix, "")
-            //.replace(".scala", "")
-            //.split("/")
-            //.mkString(".")
-        //}.filter(_ != "benchmarks.Benchmark")
-          //.mkString("Seq(new ", ", new ", ")")
-        //val file = (sourceManaged in Compile).value / "benchmarks" / "Discover.scala"
-        //IO.write(file,
-                 //s"""
-          //package benchmarks
-          //object Discover {
-            //val discovered: Seq[benchmarks.Benchmark[_]] = $benchmarks
-          //}
-        //""")
-        //Seq(file)
-      //}.taskValue
-    //)
     .settings(
       zouzou := {
         import scala.scalanative.nir.Dep
@@ -420,32 +392,17 @@ lazy val codebase =
         import scala.scalanative.optimizer
         import scala.collection.mutable
 
-        println("'target' path = " + (target).value)
         val baseDir = baseDirectory.value
-        println("baseDir = "+baseDir)
         val rootPath = baseDir.getAbsolutePath.split("/").dropRight(1).mkString("/")
         val rootFile = new java.io.File(rootPath)
         val rootDir = scala.scalanative.io.VirtualDirectory.local(rootFile)
         val glob = rootFile ** "*.nir"
         val pattern = "scala-2.11/classes/"
 
-        //val forbiddenClasses = Set(
-          //"scala.beans.ScalaBeanInfo"
-        //)
-
-        //val classes = glob.get.map { f =>
-          //val classPath = f.getAbsolutePath.split(pattern).last.replace(".nir", "").split("/").mkString(".")
-          //val filePath = f.toPath
-          //(classPath, filePath)
-        //}
-
-        //val toLoad = classes.filterNot {
-          //case (cp, _) => forbiddenClasses.contains(cp)
-        //}
+        println("Loading nir files...")
 
         val allGlobalsInfo = glob.get.flatMap { f =>
           val classPath = f.getAbsolutePath.split(pattern).last.replace(".nir", "").split("/").mkString(".")
-          println("Loading " + classPath)
           val buf = rootDir.read(f.toPath)
           val deserializer = new scala.scalanative.nir.serialization.BinaryDeserializer(buf)
 
@@ -456,10 +413,9 @@ lazy val codebase =
               case _ => throw new IllegalStateException
             }
           }
-          //val top = Global.Top(classPath)
-
-          //(top -> defns)
         }
+
+        println(s"Loaded ${allGlobalsInfo.size} globals")
 
         val defns = allGlobalsInfo.map {
           case (g, defn, _) => (g -> defn)
@@ -477,143 +433,21 @@ lazy val codebase =
 
         while (lastLoadedSize != loaded.size) {
           lastLoadedSize = loaded.size
-          val (filtered, ignored) = loaded.partition { g =>
+          loaded = loaded.filter { g =>
             deps(g).forall {
               case Dep.Direct(dg) => loaded(dg)
               case Dep.Conditional(dg, cond) => (loaded(dg) || !loaded(cond))
             }
           }
-
-          ignored.foreach(k => println("Ignoring "+Shows.showGlobal(k)))
-          println()
-          loaded = filtered
         }
 
+        println(s"Filtered out ${allGlobalsInfo.size - lastLoadedSize} globals")
         println("Remaining globals: "+lastLoadedSize)
 
-        //allGlobalDefs.foreach {
-          //case (g, ds) =>
-            //println("===")
-            //println(Shows.showGlobal(g))
-            //println("===")
-            //println(Shows.showDefns(ds))
-        //}
+        println(s"Global.None ${if (loaded.contains(Global.None)) "is" else "isn't"} in there")
 
-        val config = scala.scalanative.tools.Config.empty
-        val driver = optimizer.Driver(config)
-        //val assembly = allGlobalDefs.flatMap(_._2)
         val assembly = loaded.map(defns).toSeq
-        val reporter = optimizer.Reporter.empty
-
-        optimizer.Optimizer(
-          config,
-          driver,
-          assembly,
-          reporter
-        )
-
-        //val deserializerFor = glob.get.take(5).map { f =>
-          //val classPath = f.getAbsolutePath.split(pattern).last.replace(".nir", "").split("/").mkString(".")
-          //println("Loading " + classPath)
-          //val buf = rootDir.read(f.toPath)
-          //val deserializer = new scala.scalanative.nir.serialization.BinaryDeserializer(buf)
-          //val top = Global.Top(classPath)
-          //(top -> deserializer)
-        //}.toMap
-
-        //val worklist = mutable.Stack.empty[Global]
-        //val loaded = mutable.Set.empty[Global]
-        //worklist.pushAll(deserializerFor.keys)
-
-        //while(worklist.nonEmpty) {
-          //val g = worklist.pop()
-          //if (!loaded(g)) {
-            //deserializerFor.get(g.top).foreach { deserializer =>
-              //deserializer.deserialize(g) match {
-                //case Some((deps, _, defn)) =>
-                  //println(Shows.showDefn(defn))
-                  //deps.foreach {
-                    //case Dep.Direct(depg) =>
-                      //worklist.push(depg)
-                    //case Dep.Conditional(depg, cond) =>
-                      //worklist.push(depg)
-                      //worklist.push(cond)
-                  //}
-                //case _ => println("No def found for " + Shows.showGlobal(g))
-              //}
-            //}
-            //loaded += g
-          //}
-        //}
-
-        //val wholeAssembly = glob.get.take(5).map {f =>
-          ////println(f.getAbsolutePath)
-          //val classPath = f.getAbsolutePath.split(pattern).last.replace(".nir", "").split("/").mkString(".")
-          //println("Loading " + classPath)
-
-          //val buf = rootDir.read(f.toPath)
-          //val deserializer = new scala.scalanative.nir.serialization.BinaryDeserializer(buf)
-          //val top = Global.Top(classPath)
-          ////val worklist = mutable.Stack.empty[Global]
-          ////val loaded = mutable.Set.empty[Global]
-          ////worklist.push(top)
-
-          ////while(worklist.nonEmpty) {
-            ////val next = worklist.pop()
-            ////if (!loaded(next)) {
-              ////deserializer.deserialize(next) match {
-                ////case Some((deps, _, defn)) =>
-                  ////println(Shows.showDefn(defn))
-                  ////deps.foreach {
-                    ////case Dep.Direct(dg) => loadGlobal(dg, "~"+prefix)
-                    ////case Dep.Conditional(dg, _) => loadGlobal(dg, "~"+prefix)
-                  ////}
-                ////case _ => println("No def found for " + Shows.showGlobal)
-              ////}
-
-            ////}
-          ////}
-
-          //def loadGlobal(g: scala.scalanative.nir.Global, prefix: String): Unit = {
-            //deserializer.deserialize(g) match {
-              //case Some((deps, _, topDef)) =>
-                //println(prefix + ">" + scala.scalanative.nir.Shows.showDefn(topDef))
-                //deps.foreach {
-                  //case Dep.Direct(dg) => loadGlobal(dg, "~"+prefix)
-                  //case Dep.Conditional(dg, _) => loadGlobal(dg, "~"+prefix)
-                //}
-              //case _ => println(prefix + "! No def found for " + Shows.showGlobal(g))
-            //}
-          //}
-
-          //loadGlobal(top, "")
-        //}
-        //println("baseDirectory = "+(baseDirectory in repo).value)
-        //println("sandbox target = "+(target in sandbox).value)
-        //println("repo target = "+(target in repo).value)
-        //val dir    = sourceDirectory.value
-        //val prefix = dir.getAbsolutePath.split("/").toSeq.dropRight(2).mkString("/") + "/benchmarks/src/main/scala/"
-        //println(">> " + prefix + "\n")
-        //val glob = (dir ** "/../../benchmarks/src/*Benchmark.scala")
-        //println(glob)
-        //val benchmarks = glob.get.map { f =>
-          //println(f)
-          //f.getAbsolutePath
-            //.replace(prefix, "")
-            //.replace(".scala", "")
-            //.split("/")
-            //.mkString(".")
-        //}.filter(_ != "benchmarks.Benchmark")
-          //.mkString("Seq(new ", ", new ", ")")
-        //val file = (sourceManaged in Compile).value / "benchmarks" / "Discover.scala"
-        //IO.write(file,
-                 //s"""
-          //package benchmarks
-          //object Discover {
-            //val discovered: Seq[benchmarks.Benchmark[_]] = $benchmarks
-          //}
-        //""")
-        //Seq(file)
+        optimizer.AssessPerformance(assembly)
       }
     )
     .enablePlugins(ScalaNativePlugin)
