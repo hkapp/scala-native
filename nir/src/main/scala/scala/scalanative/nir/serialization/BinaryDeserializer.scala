@@ -52,10 +52,13 @@ final class BinaryDeserializer(_buffer: => ByteBuffer) {
         (deps.toSeq, links.toSeq, defn)
     }
 
-  def loadAll(): Seq[Defn] =
-    header.keys.map(deserialize).collect {
-      case Some((_, _, defn)) => defn
-    }.toSeq
+  //def loadAll(): Seq[Defn] =
+    //header.keys.map(deserialize).collect {
+      //case Some((_, _, defn)) => defn
+    //}.toSeq
+
+  def allGlobals(): Seq[Global] =
+    header.keys.toSeq
 
   private def getSeq[T](getT: => T): Seq[T] =
     (1 to getInt).map(_ => getT).toSeq

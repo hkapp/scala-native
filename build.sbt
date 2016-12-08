@@ -429,29 +429,67 @@ lazy val codebase =
         val glob = rootFile ** "*.nir"
         val pattern = "scala-2.11/classes/"
 
-        val forbiddenClasses = Set(
-          "scala.beans.ScalaBeanInfo"
-        )
+        //val forbiddenClasses = Set(
+          //"scala.beans.ScalaBeanInfo"
+        //)
 
-        val classes = glob.get.map { f =>
+        //val classes = glob.get.map { f =>
+          //val classPath = f.getAbsolutePath.split(pattern).last.replace(".nir", "").split("/").mkString(".")
+          //val filePath = f.toPath
+          //(classPath, filePath)
+        //}
+
+        //val toLoad = classes.filterNot {
+          //case (cp, _) => forbiddenClasses.contains(cp)
+        //}
+
+        val allGlobalsInfo = glob.get.flatMap { f =>
           val classPath = f.getAbsolutePath.split(pattern).last.replace(".nir", "").split("/").mkString(".")
-          val filePath = f.toPath
-          (classPath, filePath)
-        }
-
-        val toLoad = classes.filterNot {
-          case (cp, _) => forbiddenClasses.contains(cp)
-        }
-
-        val allGlobalDefs = toLoad.map { case (classPath, filePath) =>
           println("Loading " + classPath)
-          val buf = rootDir.read(filePath)
+          val buf = rootDir.read(f.toPath)
           val deserializer = new scala.scalanative.nir.serialization.BinaryDeserializer(buf)
-          val defns = deserializer.loadAll()
-          val top = Global.Top(classPath)
 
-          (top -> defns)
+          val globals = deserializer.allGlobals()
+          globals.map { g =>
+            deserializer.deserialize(g) match {
+              case Some((deps, _, defn)) => (g, defn, deps)
+              case _ => throw new IllegalStateException
+            }
+          }
+          //val top = Global.Top(classPath)
+
+          //(top -> defns)
         }
+
+        val defns = allGlobalsInfo.map {
+          case (g, defn, _) => (g -> defn)
+        }.toMap
+
+        val deps = allGlobalsInfo.map {
+          case (g, _, deps) => (g -> deps)
+        }.toMap
+
+        var loaded = allGlobalsInfo.map {
+          case (g, _, _) => g
+        }.toSet
+
+        var lastLoadedSize = 0
+
+        while (lastLoadedSize != loaded.size) {
+          lastLoadedSize = loaded.size
+          val (filtered, ignored) = loaded.partition { g =>
+            deps(g).forall {
+              case Dep.Direct(dg) => loaded(dg)
+              case Dep.Conditional(dg, cond) => (loaded(dg) || !loaded(cond))
+            }
+          }
+
+          ignored.foreach(k => println("Ignoring "+Shows.showGlobal(k)))
+          println()
+          loaded = filtered
+        }
+
+        println("Remaining globals: "+lastLoadedSize)
 
         //allGlobalDefs.foreach {
           //case (g, ds) =>
@@ -463,7 +501,8 @@ lazy val codebase =
 
         val config = scala.scalanative.tools.Config.empty
         val driver = optimizer.Driver(config)
-        val assembly = allGlobalDefs.flatMap(_._2)
+        //val assembly = allGlobalDefs.flatMap(_._2)
+        val assembly = loaded.map(defns).toSeq
         val reporter = optimizer.Reporter.empty
 
         optimizer.Optimizer(
