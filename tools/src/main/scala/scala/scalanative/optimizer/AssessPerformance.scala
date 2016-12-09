@@ -31,9 +31,24 @@ object AssessPerformance {
       metric.reportOn(assembly, optimizedCode)
     }
 
-    println(assembly.groupBy(_.getClass.getName.toString).map {case (k,v) => (k, v.size)})
-    println(assembly.groupBy(_.getClass.getName.toString).map {case (k,v) => (k, v.map(defn => showDefn(defn).toString.count(_ == '\n')).sum)})
+    //val oneLiners = methods(assembly).count { m =>
+      //val repr = showDefn(m).toString
+      //(lineCount(repr) == 1)
+    //}
 
+    //println("One liners: " + oneLiners)
+
+    //println(assembly.groupBy(_.getClass.getName.toString).map {case (k,v) => (k, v.size)})
+    //println(assembly.groupBy(_.getClass.getName.toString).map {case (k,v) => (k, v.map(defn => showDefn(defn).toString.count(_ == '\n')).sum)})
+
+    //println("Any global :")
+    //println(showDefn(optimizedCode(17)))
+    //println("Line count: " + lineCount(showDefn(optimizedCode(17)).toString))
+    //println("Any method :")
+    //println(showDefn(methods(optimizedCode)(3)))
+    //println("Line count: " + lineCount(showDefn(methods(optimizedCode)(3)).toString))
+
+    //println("Line count with showDefns: "+showDefns(assembly).toString.count(_ == '\n'))
   }
 
   trait Metric {
@@ -68,22 +83,26 @@ object AssessPerformance {
 
     object Raw extends StaticMetric {
       override def measure(code: Seq[Defn]): Int =
-        code.map(defnSize).sum
+        codeSize(code)
+        //code.map(defnSize).sum
 
-      def defnSize(defn: Defn): Int =
-        showDefn(defn).toString.count(_ == '\n')
+      //def defnSize(defn: Defn): Int =
+        //lineCount(showDefn(defn).toString)
     }
 
     object Optimizeable extends StaticMetric {
-      override def measure(code: Seq[Defn]): Int =
-        code.map(optimizeableLinesIn).sum
-
-      def optimizeableLinesIn(defn: Defn): Int = {
-        defn match {
-          case Defn.Define(_, _, _, insts) => insts.size - 2 // at least one Cf and one Label
-          case _ => 0
+      override def measure(code: Seq[Defn]): Int = {
+          val methodDefs = methods(code)
+          codeSize(methodDefs) - 4 * methodDefs.size
         }
-      }
+        //code.map(optimizeableLinesIn).sum
+
+      //def optimizeableLinesIn(defn: Defn): Int = {
+        //defn match {
+          //case m: Defn.Define => insts.size - 2 // at least one Cf and one Label
+          //case _ => 0
+        //}
+      //}
     }
 
     object Touched extends Metric {
@@ -120,13 +139,33 @@ object AssessPerformance {
       }
     }
 
-    object OutOfTouched extends StaticMetric {
-      override def measure(code: Seq[Defn]): Int =
-        Raw.measure(methods(code))
+    object OutOfTouched extends Metric {
+      override def reportOn(originalCode: Seq[Defn], optimizedCode: Seq[Defn]): Unit = {
+        assert(originalCode.size == optimizedCode.size)
+        val (origTouched, optiTouched) = originalCode.zip(optimizedCode).filter {
+          case (origDef, optiDef) => (origDef != optiDef)
+        }.unzip
+        val touched = origTouched.size
+
+        //val rawPerf = Raw.performance(Raw.measure(origTouched))
+
+        println("== OutOfTouched ==")
+        print("  ")
+        Raw.reportOn(origTouched, optiTouched)
+        print("  ")
+        Optimizeable.reportOn(origTouched, optiTouched)
+        //println(s"Methods touched: $touched (out of $total)")
+        //println(s"Performance: ${perf * 100} %")
+      }
     }
   }
 
   def methods(defns: Seq[Defn]): Seq[Defn] =
     defns.collect { case m: Defn.Define => m }
 
+  def lineCount(str: String): Int =
+    str.count(_ == '\n') + 1
+
+  def codeSize(code: Seq[Defn]): Int =
+    code.map(defn => lineCount(showDefn(defn).toString)).sum
 }
