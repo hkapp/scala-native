@@ -30,6 +30,7 @@ object Driver {
         pass.Display,
         pass.BasicBlocksFusion,
         pass.OpportunityTesting,
+        pass.BlockParamReduction,
         pass.Canonicalization,
         pass.GlobalValueNumbering,
         pass.MainInjection,
