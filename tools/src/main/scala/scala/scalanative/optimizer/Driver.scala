@@ -32,6 +32,7 @@ object Driver {
         //pass.OpportunityTesting,
         pass.BlockParamReduction,
         pass.Canonicalization,
+        pass.ConstantFolding,
         pass.GlobalValueNumbering,
         pass.MainInjection,
         pass.ExternHoisting,
