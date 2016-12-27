@@ -33,6 +33,7 @@ object Driver {
         pass.BlockParamReduction,
         pass.Canonicalization,
         pass.ConstantFolding,
+        pass.PartialEvaluation,
         pass.GlobalValueNumbering,
         pass.MainInjection,
         pass.ExternHoisting,
