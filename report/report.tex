@@ -7,12 +7,25 @@
 \usepackage{amssymb}
 \usepackage{graphicx}
 \usepackage[left=3cm,right=3cm,top=3cm,bottom=3cm]{geometry}
+
 \usepackage{hyperref}
+\usepackage{caption}
+\usepackage{subcaption}
+
+\usepackage{listings}
+\usepackage{color}
+
+\lstset{
+	language=Scala,
+	keywordstyle=\color{blue},
+	frame = single
+}
 
 \author{Hugo Kapp 227942}
 \title{Semester project report}
 
 \newcommand{\scala}[1]{\textsf{#1}}
+\newcommand{\nir}[1]{\texttt{#1}}
 
 \begin{document}
 
@@ -58,16 +71,77 @@ The first optimization implementend is called Global Value Numbering, and someti
 
 \subsection{Idea}
 
-The idea is taken directly from \cite{ssabook}, which also provides a proof of correctness. The general idea is to reuse the result of computations that were already made in the past. To be able to do that, two conditions need to be met :
+The idea is taken directly from \cite{ssabook}, which also provides a proof of correctness. The general idea is to reuse the result of computations that were already made in the past, which makes GVN a redundancy elimination optimzation. To be able to do that, two conditions need to be met :
 
 \begin{enumerate}
-\item The two computations yield the same result in all cases
+\item The two computations yield the same result in all cases, and there is no side-effect
 \item In all possible paths of the control flow, the result we want to reuse has been computed before the location we want to reuse it at
 \end{enumerate}
 
-The first condition is very simple to understand, but the second might seem more complex. It is easily understood with the example in 1.
+The first condition is very simple to understand, but the second might seem more complex. It can be explained using the example in Figure \ref{fig:gvn}. In \ref{fig:gvn1}, the computation \scala{a + 1} is not necessarily done when we reach the definition of \scala{c}. In \ref{fig:gvn2}, the result has already been computed when we reach the definition for \scala{b}, so we can avoid the re-computation of \scala{a + 1}.
 
+\begin{figure}[h]
+	\begin{subfigure}{0.5\textwidth}
+		\begin{lstlisting}
+if (...) {
+  val b = a + 1
+  ...
+}
+val c = a + 1
+		\end{lstlisting}
+		\caption{Unreduceable code}
+		\label{fig:gvn1}
+	\end{subfigure}
+	\quad
+	\begin{subfigure}{0.5\textwidth}
+		\begin{lstlisting}
+val c = a + 1
+if (...) {
+  val b = a + 1
+  // val b = c
+  ...
+}
+		\end{lstlisting}
+		\caption{Reduceable code}
+		\label{fig:gvn2}
+	\end{subfigure}
+	\caption{GVN examples}
+	\label{fig:gvn}
+\end{figure}
 
+\subsection{Value Numbering}
+
+Following its name, GVN uses value numbering to achieve the first condition. This is opposed to syntactic redundancy, where we consider that two expressions yield the same result only if they are written the same way (modulo the commutativity of operations).
+
+In value numbering, each variable in the program has a hash value associated to it. We call the function that gives these hashes $h$. The hash value for variable $v$ is then given by $h(v)$. This value is computed using the defining operation for $v$, and the hash value for each of its operand. Note that this only works on programs that are in SSA form, like the NIR, because we need a single definition for each variable.
+
+For example, say we have \nir{\%b = \%a + 1}. Then $h(\nir{\%b}) = h(\nir{\%a + 1}) = agg(\nir{+}, h(\nir{\%a}), h(\nir{1}))$. The aggregation function used ($agg$) is any hashing function.
+
+Bootstrapping is done by giving each input variable a value that depend on its name. Constants are give a hash that depends on their value.
+
+\subsection{Dominator tree}
+
+To check for the second condition discussed earlier, we use the concept of dominator tree, also discussed in the SSA book \cite{ssabook}. From this very book, we get the following definition for domination :
+\newline
+A basic block $n_1$ \textit{dominates} basic block $n_2$ if every path in the control flow graph from the entry point to $n_2$ includes $n_1$. By convention, every basic block dominates itself.
+
+In other words, $n_2$ is dominated by $n_1$ if we have to go through $n_1$ before going to $n_2$. Thus, if $v_1$ is defined in block $n_1$ and $v_2$ is defined in block $n_2$, and $n_1$ dominates $n_2$, then we know that the value of $v_1$ has been computed when we reach the definition of $v_2$. Note that this only holds if $n_1 \neq n_2$, but if it is the case, then it is trivial to check that $v_1$ is indeed defined before $v_2$.
+
+We use this to build the dominator tree, which gives, for each block in the CFG, the set of blocks that dominate it. This allows us to easily check if the value of a variable $v$ can be used at a given point $p$ in the program, by verifying that $p$'s basic block is dominated by the block in which $v$ is defined.
+
+\subsection{Algorithm}
+
+Using both parts, we can then easily check which variables always have the same value, and reduce the ones computed later. The algorithm is as follows : \newline
+For each instruction:
+\begin{enumerate}
+\item Compute the value for $v$, $h(v)$, using the values for its operands
+\item For each variable $w$ that has the same value :
+	\begin{enumerate}
+	\item Check if the definitions for $v$ and $w$ match
+	\item Check if the value of $w$ can be reused at $v$
+	\item If both conditions are verified, then replace $v$ by $w$
+	\end{enumerate}
+\end{enumerate}
 
 \subsection{Implementation}
 
