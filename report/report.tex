@@ -1,17 +1,77 @@
-\documentclass[10pt,a4paper]{article}
+\documentclass[11pt,a4paper]{article}
+
 \usepackage[utf8]{inputenc}
 \usepackage[english]{babel}
 \usepackage{amsmath}
 \usepackage{amsfonts}
 \usepackage{amssymb}
 \usepackage{graphicx}
-\usepackage[left=2cm,right=2cm,top=2cm,bottom=2cm]{geometry}
+\usepackage[left=3cm,right=3cm,top=3cm,bottom=3cm]{geometry}
+\usepackage{hyperref}
+
 \author{Hugo Kapp 227942}
 \title{Semester project report}
+
+\newcommand{\scala}[1]{\textsf{#1}}
+
 \begin{document}
 
 \maketitle
 
-boubou
+\section{Introduction}
+
+We explain in this report all that was done during this semester project : the goals, the ideas and results achieved. We give in this section insights about why this project is important, as well as the ground we start with. We then give the details of each optimization that is implemented, and pointers to their correctness.
+
+\subsection{Motivation}
+
+In recent compilers, compilation speed is an issue. This is particularly important in Scala compilers, because the richness of the language is hard to resolved automatically. The process is therefore slower than for other languages. For ScalaNative, this problem is worsened by the long compilation time of LLVM, which is relatively slow when applied to big files. Because there is no dynamic linking in ScalaNative, all symbols and definitions that can be reached during the execution of the program are statically linked during compilation. This leads to a very big program that needs to go through the whole compilation pipeline, even for very small input programs.
+
+All of this makes the ScalaNative compiler very slow, and produces huge executables.
+
+\subsection{Goal}
+
+The goal of this project is therefore to reduce the amount of code worked with, through various optimizations. We could let the LLVM compiler take care of all of this, as it has a very efficient optimization pipeline. The idea here is to take advantage of the domain-specific knowledge we have, before it is lost due to primitives lowering to LLVM. On top of that, having less code to perform the passes on should speed up the compilation.
+
+The only goal here is code reduction, and not execution speed. Any reduction in the final size of the executable, as well as compilation or execution speed-up, in totally incidental, but will still be noted.
+
+\subsection{The ScalaNative compiler}
+
+Before we start explaining the various optimizations implemented and their impact, we first need to talk a little bit about the compiler organization and specific. Only what is necessary is explained here, and kept abstract. For more details on the compiler, please refer to the documentation in \cite{nativedoc}.
+
+\subsection*{Compiler organization}
+
+The compiler is organized as a classic pipeline consisting of a sequence of \scala{Pass}.  For this project, we only add passes to the compilation pipeline, which will alter the current form of the code.
+
+\subsubsection*{Native Intermediate Representation}
+
+Scala Native uses its own intermediate representation (IR), called \textit{Native Intermediate Representation} and abbreviated NIR.
+
+It is in SSA form, which stands for \textit{Static Single Assignment}. This means that variables have only one static definition in the program, which can be performed multiple times during execution. Different values can then be merged to define a new variable, using the concept of $\phi$-functions that can be found in the litterature (see \cite{ssabook}). In NIR, classic $\phi$-functions are replaced by arguments passed to each basic block.
+
+The instruction set of NIR is composed of a subset of LLVM operations, with the same semantics, plus some high-level constructs coming from Scala. The latter are lowered during the compilation process to be expressed in terms of LLVM instructions.
+
+Further details about NIR can be found in \cite{nirdoc}.
+
+\section{Global Value Numbering}
+
+
+\section{Control-flow optimizations}
+
+
+\section{InstCombine}
+
+\section{Results}
+
+
+\begin{thebibliography}{9}
+
+   \bibitem{nativedoc} Scala Native documentation \newline \url{http://scala-native.readthedocs.io}
+
+	\bibitem{nirdoc} NIR documentation \newline \url{http://scala-native.readthedocs.io/en/latest/contrib/nir.html}
+	
+	\bibitem{ssabook} SSA book
+
+\end{thebibliography}
+
 
 \end{document}
