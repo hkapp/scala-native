@@ -211,22 +211,6 @@ object GlobalValueNumbering extends PassCompanion {
           }
           eqType(valtyA, valtyB) && ((nameA == nameB) || eqDefs)
 
-        case (_, Local(nameB, valtyB)) =>
-          println(s"Triggered for ${Shows.showVal(valueA)} and ${Shows.showVal(valueB)}")
-          lazy val eqThroughCopy = localDefs(nameB) match {
-            case Inst.Let(_, Op.Copy(copiedVal)) => eqVal(valueA, copiedVal)
-            case _ => false
-          }
-          (valueA.ty == valtyB) && eqThroughCopy
-
-        case (Local(nameA, valtyA), _) =>
-          println(s"Triggered for ${Shows.showVal(valueA)} and ${Shows.showVal(valueB)}")
-          lazy val eqThroughCopy = localDefs(nameA) match {
-            case Inst.Let(_, Op.Copy(copiedVal)) => eqVal(copiedVal, valueB)
-            case _ => false
-          }
-          (valtyA == valueB.ty) && eqThroughCopy
-
         case _ =>
           valueA == valueB
       }
@@ -312,7 +296,7 @@ object GlobalValueNumbering extends PassCompanion {
         case Method(obj, name)          => Seq("Method", obj, name)
         case As(ty, obj)                => Seq("As", ty, obj)
         case Is(ty, obj)                => Seq("Is", ty, obj)
-        case Copy(value)                => Seq(value)
+        case Copy(value)                => Seq("Copy", value)
         case Closure(ty, fun, captures) => "Closure" +: ty +: fun +: captures
 
         case Classalloc(name) => Seq("Classalloc", name)
