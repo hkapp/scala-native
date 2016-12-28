@@ -54,11 +54,29 @@ Further details about NIR can be found in \cite{nirdoc}.
 
 \section{Global Value Numbering}
 
+The first optimization implementend is called Global Value Numbering, and sometimes abbreviated GVN.
+
+\subsection{Idea}
+
+The idea is taken directly from \cite{ssabook}, which also provides a proof of correctness. The general idea is to reuse the result of computations that were already made in the past. To be able to do that, two conditions need to be met :
+
+\begin{enumerate}
+\item The two computations yield the same result in all cases
+\item In all possible paths of the control flow, the result we want to reuse has been computed before the location we want to reuse it at
+\end{enumerate}
+
+The first condition is very simple to understand, but the second might seem more complex. It is easily understood with the example in 1.
+
+
+
+\subsection{Implementation}
 
 \section{Control-flow optimizations}
 
 
 \section{InstCombine}
+
+% need a note on passes placement
 
 \section{Results}
 
