@@ -145,6 +145,22 @@ For each instruction:
 
 \subsection{Implementation}
 
+Here we give a few details on the implementation on the described technique of Global Value Numbering.
+
+First, we build the dominator tree by doing a single pass through the CFG. For each block $n_i$, the blocks dominating it is the set $D_i = \{i\} \cup \left( \bigcap\limits_{j \in pred(i)} D_j \right)$, where $pred(i)$ gives the set of predecessors to the block $n_i$ in the CFG. When the CFG contains loops, we need to do a fixpoint to find the correct domination set.
+
+We use the \textsf{Murmur3} hash function, from the scala standard library (\scala{scala.util.hashing.MurmurHash3}). This provides good and very fast hashes, which is useful because we don't need cryptographic-level hashing. We take 32 bits hashes because it is convenient (it allows us to use the \scala{hashCode} function whenever possible), and is enough not to produce collisions (false positives, discussed later).
+
+Even with hashing done correctly, we still need to define what it means for two variables to have the same definition. This is done in a recursive manner, using the following rules :
+\newline
+Two variables $a$ and $b$ are \textit{deep equal} if:
+\begin{enumerate}
+\item $a$ and $b$ have the same name (they are indeed the same variable)
+\item or their respective definitions match, i.e. they use the same operation, and their operands are \textit{deep equal}
+\end{enumerate}
+
+Having defined all of this, we just follow the algorithm sketched above, building the dominator tree before going through the code. Note that, when a variable $b$ is found to be replaceable by the value of another variable $a$, we use a simple NIR instruction \nir{copy}, which avoids having to replace $a$ by $b$ everywhere (\nir{copy} instructions are simplified later in the pipeline).
+
 \section{Control-flow optimizations}
 
 
