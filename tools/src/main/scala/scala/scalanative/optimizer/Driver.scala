@@ -23,9 +23,11 @@ object Driver {
     new Impl(
       Seq(
         pass.GlobalBoxingElimination,
-        pass.UnitSimplification,
-        pass.DeadCodeElimination,
+        //pass.UnitSimplification,
+        //pass.DeadCodeElimination,
+        pass.Display,
         pass.CfChainsSimplification,
+        pass.Display,
         pass.BasicBlocksFusion,
         pass.OpportunityTesting,
         pass.Canonicalization,
