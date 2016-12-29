@@ -163,6 +163,37 @@ Having defined all of this, we just follow the algorithm sketched above, buildin
 
 \section{Control-flow optimizations}
 
+We discuss in this section various optimizations that are aimed at simplifying the control-flow graph.
+
+\subsection{Unit simplification}
+
+\subsubsection*{Problem}
+
+In Scala, every code block has a value. This is very useful in general, but sometimes the value is not used. Nevertheless, it has to be accounted for by the compiler, that the value of this block might be used later in the future. This is especially true for if-then-else blocks, where the value is usually not important. In such cases, the types of the last instruction of the said blocks rarely match, or match with unit (with assignment variables for example).
+
+% the case is actually if alone (no else) !
+
+In this case, the Scala Native compiler still needs a way to merge the outcomes of these code blocks, and does so by having the next basic block have a parameter of type \scala{Unit}, where the two branches give their own output value. This is not necessary, as we know that \scala{Unit} is the type that has only one value (the \scala{Unit} object).
+
+\subsubsection*{SimplifyUnit}
+
+To solve this problem, we add a very simple pass to the compiler, called \scala{SimplifyUnit}. Its job is very simple : whenever a variable of type \scala{Unit} is used (either as an operand, or given as a parameter to a block or function), it is replaced by the actual value \scala{Unit}.
+
+This is helpful because the LLVM compiler can not simplify all of these variables later, because it doesn't know that the type \scala{Unit} only has one value. But this alone wouldn't be enough.
+
+\subsubsection*{Dead parameters elimination}
+
+Simplifying the unit usage is a nice thing, but it still leaves a complicated CFG, with a lot of unused block parameters. Even if the parameter variable with type \scala{Unit} was indeed used in the block, its use gets replaced by the value \scala{Unit}. Therefore, all block parameters with type \scala{Unit} can be removed.
+
+We can actually generalize this by adding to the normal \scala{DeadCodeElimination} phase a simple analysis on the block parameters on top of the normal variables. This simplifies the CFG a lot, and makes it more readable.
+
+Note that these improvements do not reduce the code size by themselves (not in terms of code lines at least), but allows for further optimizations in the other passes, and increases the optimization potential of LLVM as well.
+
+\subsection{CfChainsSimplification}
+
+\subsection{BasicBlocksFusion}
+
+\subsection{BlockParamReduction}
 
 \section{InstCombine}
 
