@@ -1,0 +1,8 @@
+digraph {
+ node [shape=box, fontname="Courier"];
+2 -> {3 5};
+2 [ label="...\l  if .. then %src.3 else %src.5\l" ]
+5 [ label="%src.5(%src.9 : unit):\l  ...\l" ];
+3 -> {5};
+3 [ label="%src.3:\l  ...\l  %src.8 = call println\l  jump %src.5(%src.8 : unit)\l" ]
+}

@@ -1,7 +1,7 @@
 scalalib/src/
 target/
 _build/
-*.dot
+#*.dot
 *.ppm
 .idea
 _build/
