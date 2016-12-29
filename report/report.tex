@@ -11,6 +11,7 @@
 \usepackage{hyperref}
 \usepackage{caption}
 \usepackage{subcaption}
+\usepackage{mathtools}
 
 \usepackage{listings}
 \usepackage{color}
@@ -173,7 +174,7 @@ In Scala, every code block has a value. This is very useful in general, but some
 
 % the case is actually if alone (no else) !
 
-In this case, the Scala Native compiler still needs a way to merge the outcomes of these code blocks, and does so by having the next basic block have a parameter of type \scala{Unit}, where the two branches give their own output value. This is not necessary, as we know that \scala{Unit} is the type that has only one value (the \scala{Unit} object).
+In this case, the Scala Native compiler still needs a way to merge the outcomes of these code blocks, and does so by having the next basic block have a parameter of type \scala{Unit}, where the two branches give their own output value. This is shown in Figure \ref{fig:cfc}. This is not necessary, as we know that \scala{Unit} is the type that has only one value (the \scala{Unit} object).
 
 \subsubsection*{SimplifyUnit}
 
@@ -189,7 +190,53 @@ We can actually generalize this by adding to the normal \scala{DeadCodeEliminati
 
 Note that these improvements do not reduce the code size by themselves (not in terms of code lines at least), but allows for further optimizations in the other passes, and increases the optimization potential of LLVM as well.
 
-\subsection{CfChainsSimplification}
+\subsection{Control-flow chains}
+
+\subsubsection*{Problem}
+
+The original CFG produced by the compiler is very simple. For any control-flow branching, it produces a "diamond", which is the result of the left branch and right branch dissociating, then merging in the next shared portion of the code. But in many cases, this is not necessary.
+
+For example, take the code in Figure \ref{fig:cfc} and its (simple) CFG. Because there is no "else" part to the "if", we could already jump to the block \nir{\%src.5} without going through \nir{\%src.4} if the condition is not met.
+% This goal CFG is shown in \ref{fig:cfc:cfg2}.
+
+\begin{figure}[h]
+	\begin{subfigure}{0.5\textwidth}
+		\begin{lstlisting}
+if (...) {
+  println(..)
+}
+// no else
+		\end{lstlisting}
+		%\caption{Simple example code}
+		%\label{fig:cfccode}
+	\end{subfigure}
+	\quad
+	\begin{subfigure}{0.5\textwidth}
+		\includegraphics[width=\textwidth]{images/cfc-cfg1.png}
+		%\caption{Reduceable code}
+		%\label{fig:cfccfg1}
+	\end{subfigure}
+	\caption{A simple code example, and its corresponding CFG}
+	\label{fig:cfc}
+\end{figure}
+
+\subsubsection*{CfChainsSimplification}
+
+To solve the kind of problems explained above, we add a new pass to the compiler, called \scala{CfChainsSimplification}. Its goal is to simplify the control flow using global CFG informations, and in particular to solve these simple control-flow chains, where a block is only comprised of a single control-flow instruction. We use the following rules for simplification :
+
+$$ \frac{\nir{\%a(\%b..): Cf}}{\nir{jump \%a(\%c..)} \longrightarrow \nir{Cf} \  | \  \{\nir{\%b..} \rightarrow \nir{\%c..}\}} $$
+
+$$ \nir{if true then \%a(\%b..) else \%c(\%d..)} \longrightarrow \nir{jump \%a(\%b..)} $$
+
+$$ \nir{if false then \%a(\%b..) else \%c(\%d..)} \longrightarrow \nir{jump \%c(\%d..)} $$
+
+$$ \frac{\nir{jump \%a(\%b..)} \longrightarrow^* \nir{jump \%a'(\%b'..)} \quad \nir{jump \%c(\%d..)} \longrightarrow^* \nir{jump \%c'(\%d'..)}}{\nir{if \%e then \%a(\%b..) else \%c(\%d..)} \longrightarrow \nir{if \%e then \%a'(\%b'..) else \%c'(\%d'..)}} $$
+
+$$ \nir{switch \%a \{ default: \%b \} } \longrightarrow \nir{jump \%b} $$
+
+$$ \frac{\nir{\%a = \%b}_i}{\nir{switch \%a \{ cases \%b..: \%c.. ; default: \%d \} } \longrightarrow \nir{jump \%c}_i} $$
+
+$$ \frac{\nir{jump \%c}_i \longrightarrow^* \nir{jump \%c'}_i \quad \nir{jump \%d} \longrightarrow^* \nir{jump \%d'}}{\splitfrac{\nir{switch \%a \{ cases \%b..: \%c.. ; default: \%d \} }}{\longrightarrow \nir{switch \%a \{ cases \%b..: \%c'.. ; default: \%d \} }}} $$
 
 \subsection{BasicBlocksFusion}
 
