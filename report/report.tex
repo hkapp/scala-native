@@ -238,11 +238,83 @@ $$ \frac{\nir{\%a = \%b}_i}{\nir{switch \%a \{ cases \%b..: \%c.. ; default: \%d
 
 $$ \frac{\nir{jump \%c}_i \longrightarrow^* \nir{jump \%c'}_i \quad \nir{jump \%d} \longrightarrow^* \nir{jump \%d'}}{\splitfrac{\nir{switch \%a \{ cases \%b..: \%c.. ; default: \%d \} }}{\longrightarrow \nir{switch \%a \{ cases \%b..: \%c'.. ; default: \%d \} }}} $$
 
-\subsection{BasicBlocksFusion}
+Where \nir{Cf} is any single control-flow instruction.
 
-\subsection{BlockParamReduction}
+The pass does fixpoint iterations on each control-flow instruction, following the rules above, until convergence for this instruction has been reached. This is particularly useful when the control flow chains are rather long, and static information is carried along (for example a \nir{jump true} that jumps to an \nir{if} can directly be reduced).
 
-\section{InstCombine}
+\subsection{Merging basic blocks}
+
+\subsubsection*{Idea}
+
+A very simple control-flow simplification is the one that reduces unnecessary basic blocks. The conditions for a block $n_1$ to be removed is that is has only a single predecessor in the CFG $n_p$, and $n_p$ must have a single successor in the CFG. In this case, we can merge the two blocks into one, because we know the control flow will always go to $n_1$ at the end of $n_p$, and $n_1$ is not used anywhere else.
+
+This is an easy way to reduce the CFG and the number of branching that appear in the code. On top of that, because the parameters of the fused block now have known values, additional optimizations may trigger, simplifying the code further.
+
+\subsubsection*{BasicBlocksFusion}
+
+For this implementation, we add a new pass called \scala{BasicBlocksFusion}, which fuses together blocks that satisfy the aforementioned conditions.
+
+\subsection{Reducing block parameters}
+
+\subsubsection*{Problem}
+
+Even after the passes described above have been executed, there is still information that can be extracted from the CFG and be made explicit. We talk here about block parameters that are always supplied the same argument. We can simplify these by removing the said parameter, and replacing it by its supplied value. This simplifies the CFG, because blocks have less parameters, and makes their value explicit, allowing further optimizations to trigger.
+
+\subsubsection*{BlockParamReduction}
+
+Once again, we add a new pass, called \scala{BlockParamReduction}. First, it gathers the argument values that are supplied to each block parameter in the CFG. Then, parameter \nir{\%a} is removed if the set of supplied values has a single value, not counting the recursive value \nir{\%a}. We then remove the arguments from the branching locations. All of this can be done in three passes : one to build the CFG, one to gather the arguments, and one to simplify the branching and the parameters.
+
+\section{Static evaluation}
+
+We discuss here various static evaluation and pattern-based optimizations.
+
+\subsection{Canonicalization}
+
+% inspired by LLVM
+
+\subsubsection*{Goal}
+
+Because the partial evaluation and instruction combine passes are pattern-based, and some of these pattterns depend on the presence of static values (i.e. not variables), we perform canonicalization first. The goal of canonicalization is to simplify the writing of patterns, by ensuring an invariant on their location. We use here the same convention as in the LLVM compiler, and say that any static value that can be moved, is moved to the right operand. This means we only move operands for commutative operations.
+
+\subsubsection*{Canonicalization}
+
+The \scala{Canonicalization} pass is very simple. For each instruction, if it is commutative and has a static operand, then it is moved to the right-hand side.
+
+This only makes sense to perform on binary operations. The only such instructions in NIR are arithmetic, logical and comparison operators. All of these are also LLVM instruction, with the same semantics. Because LLVM has a very efficient optimization pipeline, the goal here is not to do better than the underlying compiler, but to extract simple statically known information that might be useful for the other optimization passes (which use domain-specific knowledge).
+
+Note that we do not modify instructions that manipulate floats (these are explicit instructions), because float handling is too complicated for the purpose of this project. We therefore let all float-instructions optimization to LLVM. We prefer safety over mis-optimization.
+
+\subsection{Constant folding}
+
+\subsubsection*{Idea}
+
+Constant folding is very simple. It basically emulates the run-time output of each instruction that has all its operands statically known. We can therefore propagate the knowledge we have further in the code.
+
+This is simple, but needs to capture perfectly the semantics of each operation. Most of them can easily be performed in Scala, but some of the low-level instructions may be hard to express in such a high-level language.
+
+Here again, we do not do anything with float instructions, to make sure we keep the semantics of the original program intact.
+
+\subsubsection*{ConstantFolding}
+
+We add a pass called \scala{ConstantFolding}. Because it needs all its operands to be static, it is not dependent on the \scala{Canonicalization} pass. This pass is only concerned with low-level instructions, because high-level instructions with static values are optimized in their own lowering pass. This is then a trivial pass, but special care has to be taken to follow the semantics of the LLVM operators.
+
+\subsection{Partial evaluation}
+
+\subsubsection*{Idea}
+
+The idea of partial evaluation is to use simple rules to simplify single instructions that have some static information. An example would be to say that $a \times 0$ can always be replaced by the value $0$, irrespective of the value of $a$.
+
+Such optimization passes are a set of patterns which, when they apply to the current input, need to simplify the code in some way or another. The code reduction is an obvious target, but not necessarily the best. One can easily devise a (potentially abritrary) total ordering on the set of instructions, and say that the lower instructions are simpler. In this case, reducing the code size, or bringing an operation down in the ordering are acceptable simplifications.
+
+Making sure that each pattern actually simplifies the code is important. It may provide a  very easy check for useless patterns, but also ensures that a fixpoint method will always converge.
+
+\subsubsection*{PartialEvaluation}
+
+We add yet another pass to the compiler, called \scala{PartialEvaluation}. It is a list of single-instructions patterns that all simplify the code. The ordering over the instructions can easily be devised, and is relatively intuitive, but is not detailed here. Because using a \nir{copy} operation is effectively reducing the code size, it is quite obvious that the \nir{copy} instruction is at the bottom of this ordering.
+
+\subsection{InstCombine}
+
+% inspired by LLVM
 
 % need a note on passes placement
 
