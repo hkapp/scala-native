@@ -312,14 +312,59 @@ Making sure that each pattern actually simplifies the code is important. It may 
 
 We add yet another pass to the compiler, called \scala{PartialEvaluation}. It is a list of single-instructions patterns that all simplify the code. The ordering over the instructions can easily be devised, and is relatively intuitive, but is not detailed here. Because using a \nir{copy} operation is effectively reducing the code size, it is quite obvious that the \nir{copy} instruction is at the bottom of this ordering.
 
-\subsection{InstCombine}
+\subsection{Instruction combine}
 
-% inspired by LLVM
+\subsubsection*{Idea}
+
+The idea for this optimization is inspired by the LLVM pass called \scala{InstCombine} \cite{llvm}. Relatively close to partial evaluation, this pass goes further and simplifies patterns that use knowledge about variable definitions. It is therefore able to capture patterns that span mutliple instructions.
+
+\subsubsection*{InstCombine}
+
+We add a pass called \scala{InstCombine}. Its role is to simplify multi-instructions patterns in the code. Very close to partial evaluation, it is however distinct, because it deals with much more involved patterns, and doesn't require the operands to have statically known values. It uses the operation defining its variable operands to perform optimizations.
+
+\begin{figure}[h]
+	\begin{subfigure}{0.5\textwidth}
+		\begin{lstlisting}
+%a = ...
+%b = xor %a, true
+if %b then %c else %d
+		\end{lstlisting}
+		\caption{Raw code}
+	\end{subfigure}
+	\quad
+	\begin{subfigure}{0.5\textwidth}
+		\begin{lstlisting}
+%a = ...
+%b = xor %a, true
+if %a then %d else %c
+		\end{lstlisting}
+		\caption{Optimized code}
+	\end{subfigure}
+	\caption{A code pattern simplifiable by instruction combine}
+	\label{fig:ic}
+\end{figure}
+
+An example that occurs a lot in the produced code is shown in Figure \ref{fig:ic}. The \nir{xor} with the value \nir{true} is used to negate a boolean value, as LLVM doesn't have a negation opertator. This code is the result of a simple \scala{if (!a)} expression in the original scala code. We can avoid computing the intermediate value \nir{\%b} by simply switching the branching destinations. Note that the optimized version of the code does not get rid of the definition for \nir{\%b}. This is because it could be used somewhere else in the code, although this is unlikely. Anyway, it will be cleaned up by the dead code elimination pass if possible.
+
+The criteria for reducing code is thus more complex than the one used in the last section. Here, on top of reducing instructions to simpler ones, we can also reduce the number of variable used. This may lead to some variables being reomved by DCE, which eventually reduces the code size. 
+
 
 % need a note on passes placement
 
+% add examples everywhere !
+
 \section{Results}
 
+We discuss in this section the impact the optimizations mentioned in the above sections gave.
+
+
+\section{Future work}
+
+
+\section{Conclusion}
+
+
+\section*{Acknowledgements}
 
 \begin{thebibliography}{9}
 
@@ -328,6 +373,8 @@ We add yet another pass to the compiler, called \scala{PartialEvaluation}. It is
 	\bibitem{nirdoc} NIR documentation \newline \url{http://scala-native.readthedocs.io/en/latest/contrib/nir.html}
 	
 	\bibitem{ssabook} SSA book
+	
+	\bibitem{llvm} LLVM compiler passes \newline \url{http://llvm.org/docs/Passes.html}
 
 \end{thebibliography}
 
