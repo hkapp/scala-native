@@ -355,7 +355,19 @@ The criteria for reducing code is thus more complex than the one used in the las
 
 \section{Results}
 
-We discuss in this section the impact the optimizations mentioned in the above sections gave.
+We discuss in this section the impact the optimizations mentioned in the above sections had.
+
+\subsection{Methodology}
+
+We here describe the methodology used to measure the impact of the optimization, as well as the metrics used : how they are computed, and how they can be interpreted.
+
+\subsubsection{Code base compilation}
+
+The linker of the Scala Native compiler gathers all the code that is potentially reachable from the main program given. Because it is hard to produce a program that reaches the maximum number of classes and methods possible, we bypass the linker. We create a routine that gathers all symbols (classes and methods) in the entire code base, and run the compilation passes on this code.
+
+The code base is the product of all the code that is pre-compiled and kept in \texttt{.nir} files. It is composed of the entire Scala library, a specific Scala Native library, as well as the parts of the Java library that have been re-implemented in Scala for the purpose of Scala Native. We also have some other programs and benchmarks.
+
+The entire code base described here contains, as of January 3rd, 2017, 5195 compiled files, for a total of 6.7 million lines of NIR code. However, because the Scala library has some dependency on the Java library, and that the latter is not complete, some of the files have to be disabled. This leads to 
 
 
 \section{Future work}
