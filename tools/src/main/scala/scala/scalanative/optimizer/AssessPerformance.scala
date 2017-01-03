@@ -16,6 +16,7 @@ object AssessPerformance {
         .append(pass.DeadCodeElimination)
     val reporter = Reporter.empty
 
+    println("Total code size : "+codeSize(assembly))
     println("Starting optimization ...")
     val optimizedCode = Optimizer(config, driver, assembly, reporter)
 

@@ -367,7 +367,7 @@ The linker of the Scala Native compiler gathers all the code that is potentially
 
 The code base is the product of all the code that is pre-compiled and kept in \texttt{.nir} files. It is composed of the entire Scala library, a specific Scala Native library, as well as the parts of the Java library that have been re-implemented in Scala for the purpose of Scala Native. We also have some other programs and benchmarks.
 
-The entire code base described here contains, as of January 3rd, 2017, 5195 compiled files, for a total of 6.7 million lines of NIR code. However, because the Scala library has some dependency on the Java library, and that the latter is not complete, some of the files have to be disabled. This leads to 
+The entire code base described here contains, as of January 3rd, 2017, 5195 compiled files, for a total of 588'295 lines of NIR code. However, because the Scala library has some dependency on the Java library, and that the latter is not complete, some of the files have to be disabled. This leads to a valid codebase of 210'228 lines of NIR code. This will give a reasonable approximation of the impact the added pass have on general purpose code, due to the size and diversity of goals for the different code sources.
 
 
 \section{Future work}
