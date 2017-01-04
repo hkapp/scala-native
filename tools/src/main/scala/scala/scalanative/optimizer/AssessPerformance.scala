@@ -6,17 +6,54 @@ import Shows._
 
 object AssessPerformance {
 
-  def apply(assembly: Seq[Defn]): Unit = {
+  val config = tools.Config.empty.withInjectMain(false)
 
-    val config = tools.Config.empty.withInjectMain(false)
+  def apply(assembly: Seq[Defn]): Unit = {
+    println("Total code size : "+codeSize(assembly))
+    reportSeparate(assembly)
+  }
+
+  def reportSeparate(assembly: Seq[Defn]): Unit = {
+    val addedPasses = Seq(
+      pass.CfChainsSimplification,
+      pass.BasicBlocksFusion,
+      pass.BlockParamReduction,
+      pass.Canonicalization,
+      pass.ConstantFolding,
+      pass.PartialEvaluation,
+      pass.InstCombine,
+      pass.GlobalValueNumbering
+    )
+
+    for (newPass <- addedPasses) {
+      val driver =
+        Driver(config)
+          .takeUpTo(pass.DeadCodeElimination)
+          .append(newPass)
+      println(
+        newPass
+          .getClass
+          .getName
+          .split('.')
+          .last
+          .replace("$",""))
+      report(assembly, driver)
+    }
+  }
+
+  def reportGlobal(assembly: Seq[Defn]): Unit = {
     val driver =
       Driver(config)
         .takeUpTo(pass.GlobalValueNumbering)
         .append(pass.CopyPropagation)
         .append(pass.DeadCodeElimination)
+
+    report(assembly, driver)
+  }
+
+  def report(assembly: Seq[Defn], driver: Driver): Unit = {
     val reporter = Reporter.empty
 
-    println("Total code size : "+codeSize(assembly))
     println("Starting optimization ...")
     val optimizedCode = Optimizer(config, driver, assembly, reporter)
 
@@ -31,25 +68,6 @@ object AssessPerformance {
     for (metric <- metrics) {
       metric.reportOn(assembly, optimizedCode)
     }
-
-    //val oneLiners = methods(assembly).count { m =>
-      //val repr = showDefn(m).toString
-      //(lineCount(repr) == 1)
-    //}
-
-    //println("One liners: " + oneLiners)
-
-    //println(assembly.groupBy(_.getClass.getName.toString).map {case (k,v) => (k, v.size)})
-    //println(assembly.groupBy(_.getClass.getName.toString).map {case (k,v) => (k, v.map(defn => showDefn(defn).toString.count(_ == '\n')).sum)})
-
-    //println("Any global :")
-    //println(showDefn(optimizedCode(17)))
-    //println("Line count: " + lineCount(showDefn(optimizedCode(17)).toString))
-    //println("Any method :")
-    //println(showDefn(methods(optimizedCode)(3)))
-    //println("Line count: " + lineCount(showDefn(methods(optimizedCode)(3)).toString))
-
-    //println("Line count with showDefns: "+showDefns(assembly).toString.count(_ == '\n'))
   }
 
   trait Metric {
