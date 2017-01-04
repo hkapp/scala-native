@@ -35,12 +35,16 @@ object AssessPerformance {
       pass.Canonicalization,
       pass.ConstantFolding,
       pass.PartialEvaluation,
-      pass.InstCombine,
+      pass.InstCombine,  // TODO : special treatment, reorder code as in CFG (could add it above)
       pass.GlobalValueNumbering
     )
 
     for (newPass <- addedPasses) {
-      val driver = Driver.empty.append(newPass)
+      val driver =
+        Driver.empty
+          .append(newPass)
+          .append(pass.CopyPropagation)
+          .append(pass.DeadCodeElimination)
 
       println(" > " +
         newPass
