@@ -176,9 +176,9 @@ In Scala, every code block has a value. This is very useful in general, but some
 
 In this case, the Scala Native compiler still needs a way to merge the outcomes of these code blocks, and does so by having the next basic block have a parameter of type \scala{Unit}, where the two branches give their own output value. This is shown in Figure \ref{fig:cfc}. This is not necessary, as we know that \scala{Unit} is the type that has only one value (the \scala{Unit} object).
 
-\subsubsection*{SimplifyUnit}
+\subsubsection*{UnitSimplification}
 
-To solve this problem, we add a very simple pass to the compiler, called \scala{SimplifyUnit}. Its job is very simple : whenever a variable of type \scala{Unit} is used (either as an operand, or given as a parameter to a block or function), it is replaced by the actual value \scala{Unit}.
+To solve this problem, we add a very simple pass to the compiler, called \scala{UnitSimplification}. Its job is very simple : whenever a variable of type \scala{Unit} is used (either as an operand, or given as a parameter to a block or function), it is replaced by the actual value \scala{Unit}.
 
 This is helpful because the LLVM compiler can not simplify all of these variables later, because it doesn't know that the type \scala{Unit} only has one value. But this alone wouldn't be enough.
 
@@ -373,7 +373,7 @@ The entire code base described here contains, as of January 3rd, 2017, 5195 comp
 
 \subsubsection{Metrics}
 
-We detail here the various metrics used to measure the performance achieved by the implemented optimizations.
+We detail here the various metrics used to measure the performance achieved by the implemented optimizations. We also interpret the results, explaining their meaning and showing why one could expect different results.
 
 \subsubsection*{Raw code reduction}
 
@@ -408,6 +408,10 @@ We show here the results observed on the code base described in \ref{codebase}. 
 \subsubsection{Other impacts}
 
 % executable size difference !
+
+% passes are before lowering phases
+
+% talk about the previous optimizations (DCE, boxing elimination, copy propagation)
 
 \section{Future work}
 

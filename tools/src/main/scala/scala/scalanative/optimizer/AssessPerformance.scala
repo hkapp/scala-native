@@ -9,12 +9,26 @@ object AssessPerformance {
   val config = tools.Config.empty.withInjectMain(false)
 
   def apply(assembly: Seq[Defn]): Unit = {
-    println("Total code size : "+codeSize(assembly))
-    reportSeparate(assembly)
+    println("Original code size : "+codeSize(assembly))
+
+    val basicDriver =
+      Driver.empty
+        .append(pass.GlobalBoxingElimination)
+        .append(pass.CopyPropagation)
+        .append(pass.DeadCodeElimination)
+
+    val simplifiedCode = runOptimizer(assembly, basicDriver)
+
+    println("Simplified code size : "+codeSize(simplifiedCode))
+    reportSeparate(simplifiedCode)
   }
 
   def reportSeparate(assembly: Seq[Defn]): Unit = {
     val addedPasses = Seq(
+      pass.GlobalBoxingElimination,
+      pass.CopyPropagation,
+      pass.DeadCodeElimination,
+      pass.UnitSimplification,
       pass.CfChainsSimplification,
       pass.BasicBlocksFusion,
       pass.BlockParamReduction,
@@ -26,17 +40,17 @@ object AssessPerformance {
     )
 
     for (newPass <- addedPasses) {
-      val driver =
-        Driver(config)
-          .takeUpTo(pass.DeadCodeElimination)
-          .append(newPass)
-      println(
+      val driver = Driver.empty.append(newPass)
+
+      println(" > " +
         newPass
           .getClass
           .getName
           .split('.')
           .last
-          .replace("$",""))
+          .replace("$","")
+        + " < ")
+
       report(assembly, driver)
     }
   }
@@ -52,10 +66,7 @@ object AssessPerformance {
   }
 
   def report(assembly: Seq[Defn], driver: Driver): Unit = {
-    val reporter = Reporter.empty
-
-    println("Starting optimization ...")
-    val optimizedCode = Optimizer(config, driver, assembly, reporter)
+    val optimizedCode = runOptimizer(assembly, driver)
 
     val metrics = Seq(
       Metrics.Raw,
@@ -68,6 +79,14 @@ object AssessPerformance {
     for (metric <- metrics) {
       metric.reportOn(assembly, optimizedCode)
     }
+  }
+
+  def runOptimizer(assembly: Seq[Defn], driver: Driver): Seq[Defn] = {
+    val reporter = Reporter.empty
+
+    println("Starting optimization ...")
+    val optimizedCode = Optimizer(config, driver, assembly, reporter)
+    optimizedCode
   }
 
   trait Metric {
