@@ -363,20 +363,57 @@ We here describe the methodology used to measure the impact of the optimization,
 
 \subsubsection{Code base compilation}
 
+\label{codebase}
+
 The linker of the Scala Native compiler gathers all the code that is potentially reachable from the main program given. Because it is hard to produce a program that reaches the maximum number of classes and methods possible, we bypass the linker. We create a routine that gathers all symbols (classes and methods) in the entire code base, and run the compilation passes on this code.
 
 The code base is the product of all the code that is pre-compiled and kept in \texttt{.nir} files. It is composed of the entire Scala library, a specific Scala Native library, as well as the parts of the Java library that have been re-implemented in Scala for the purpose of Scala Native. We also have some other programs and benchmarks.
 
 The entire code base described here contains, as of January 3rd, 2017, 5195 compiled files, for a total of 588'295 lines of NIR code. However, because the Scala library has some dependency on the Java library, and that the latter is not complete, some of the files have to be disabled. This leads to a valid codebase of 210'228 lines of NIR code. This will give a reasonable approximation of the impact the added pass have on general purpose code, due to the size and diversity of goals for the different code sources.
 
+\subsubsection{Metrics}
+
+We detail here the various metrics used to measure the performance achieved by the implemented optimizations.
+
+\subsubsection*{Raw code reduction}
+
+The first, and most obvious metric, is the raw code reduction. Mostly shown as a percentage of line reduction, it is sometimes used as the raw number of lines removed by the various optimization phases.
+
+\subsubsection*{Optimizeable code reduction}
+
+An extension of the previous criterion is called \textit{optimizeable} code reduction.
+
+The problem with the raw code reduction is that it doesn't take into account what could have been changed, and what has to be fixed. For example, all the global definitions that have to be there (NIR declares classes and traits separately from the methods they define). All of these cannot be reduced. On top of that, each method needs to have a first line of declaration, an entry block label, at least one control flow instruction, and a closing brace.
+
+Using this knowledge, we define the optimizeable code of some program as :
+
+$$ opt(p) = \sum\limits_{m \in methods(p)} size(m) - 4 $$
+
+This gives us a metric that takes into account how reduceable the code actually is.
+
+\subsubsection*{Touched methods}
+
+One other way to think about the changes the optimizations added have on the codebase is to see how many methods it affects, and out of these, what is the code reduction. This may give more insight on the effect had.
+
+% add std-dev for code reduction out of touched methods
+
+\subsection{Observed results}
+
+We show here the results observed on the code base described in \ref{codebase}. We talk mostly about code reduction, but also show briefly the variations in executable size, compilation time and execution time.
+
+\subsubsection{Code reduction}
+
+
+
+\subsubsection{Other impacts}
+
+% executable size difference !
 
 \section{Future work}
 
 
 \section{Conclusion}
 
-
-\section*{Acknowledgements}
 
 \begin{thebibliography}{9}
 
