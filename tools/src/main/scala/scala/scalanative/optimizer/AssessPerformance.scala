@@ -11,35 +11,44 @@ object AssessPerformance {
   def apply(assembly: Seq[Defn]): Unit = {
     println("Original code size : "+codeSize(assembly))
 
-    val basicDriver =
-      Driver.empty
-        .append(pass.GlobalBoxingElimination)
-        .append(pass.CopyPropagation)
-        .append(pass.DeadCodeElimination)
+    //val basicDriver =
+      //Driver.empty
+        //.append(pass.GlobalBoxingElimination)
+        //.append(pass.CopyPropagation)
+        //.append(pass.DeadCodeElimination)
 
-    val simplifiedCode = runOptimizer(assembly, basicDriver)
+    //val simplifiedCode = runOptimizer(assembly, basicDriver)
 
-    println("Simplified code size : "+codeSize(simplifiedCode))
-    reportSeparate(simplifiedCode)
+    //println("Simplified code size : "+codeSize(simplifiedCode))
+    reportSeparate(assembly)
   }
 
   def reportSeparate(assembly: Seq[Defn]): Unit = {
-    val addedPasses = Seq(
-      pass.GlobalBoxingElimination,
+    val default = Seq(
+      //pass.GlobalBoxingElimination,
       pass.CopyPropagation,
-      pass.DeadCodeElimination,
-      pass.UnitSimplification,
-      pass.CfChainsSimplification,
-      pass.BasicBlocksFusion,
-      pass.BlockParamReduction,
-      pass.Canonicalization,
-      pass.ConstantFolding,
-      pass.PartialEvaluation,
-      pass.InstCombine,  // TODO : special treatment, reorder code as in CFG (could add it above)
-      pass.GlobalValueNumbering
+      pass.DeadCodeElimination
     )
 
-    for (newPass <- addedPasses) {
+    val addedPasses = Seq(
+      (pass.GlobalBoxingElimination -> default),
+      (pass.CopyPropagation         -> Seq(pass.DeadCodeElimination)),
+      (pass.DeadCodeElimination     -> Seq(pass.CopyPropagation)),
+      (pass.UnitSimplification      -> default),
+      (pass.CfChainsSimplification  -> default),
+      (pass.BasicBlocksFusion       -> default),
+      (pass.BlockParamReduction     -> default),
+      (pass.Canonicalization        -> default),
+      (pass.ConstantFolding         -> default),
+      (pass.PartialEvaluation       -> (default :+ pass.Canonicalization)),
+      (pass.InstCombine             -> (default :+ pass.Canonicalization)),  // TODO : special treatment, reorder code as in CFG (could add it above)
+      (pass.GlobalValueNumbering    -> default)
+    )
+
+    for ((newPass, prePasses) <- addedPasses) {
+      val preDriver = prePasses.foldLeft(Driver.empty){ case (d, p) => d.append(p) }
+      val preparedAssembly = runOptimizer(assembly, preDriver)
+
       val driver =
         Driver.empty
           .append(newPass)
@@ -55,7 +64,7 @@ object AssessPerformance {
           .replace("$","")
         + " < ")
 
-      report(assembly, driver)
+      report(preparedAssembly, driver)
     }
   }
 
