@@ -372,6 +372,10 @@ lazy val benchmarks =
         Seq(file)
       }.taskValue
     )
+    .settings(
+      nativeOptimizerReporter := OptimizerReporter.toDirectory(
+        crossTarget.value)
+    )
     .enablePlugins(ScalaNativePlugin)
 
 
