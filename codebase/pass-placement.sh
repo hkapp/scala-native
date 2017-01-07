@@ -35,7 +35,7 @@ flip() {
     b=`rand`
   done
 
-  name=`sed $a'!d' "$driver" | sed s/\\\ //g | sed s/,//g`
+  name=`sed $a'!d' "$driver" | sed s/'\ '//g | sed s/','//g`
   echo "Trying $name in position $(( $b - $startln + 1 ))"
   sh "$repo/codebase/insert.sh" $a $b "$driver" > "$driver".tmp
   mv "$driver".tmp "$driver"

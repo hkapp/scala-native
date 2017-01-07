@@ -20,7 +20,7 @@ object AssessPerformance {
     //val simplifiedCode = runOptimizer(assembly, basicDriver)
 
     //println("Simplified code size : "+codeSize(simplifiedCode))
-    reportSeparate(assembly)
+    reportGlobal(assembly)
   }
 
   def reportSeparate(assembly: Seq[Defn]): Unit = {

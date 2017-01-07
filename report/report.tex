@@ -15,6 +15,7 @@
 
 \usepackage{listings}
 \usepackage{color}
+\usepackage{pgfplots}
 
 \lstset{
 	language=Scala,
@@ -27,6 +28,7 @@
 
 \newcommand{\scala}[1]{\textsf{#1}}
 \newcommand{\nir}[1]{\texttt{#1}}
+\newcommand{\perf}[1]{#1 \%}
 
 \begin{document}
 
@@ -340,7 +342,7 @@ if %a then %d else %c
 		\end{lstlisting}
 		\caption{Optimized code}
 	\end{subfigure}
-	\caption{A code pattern simplifiable by instruction combine}
+	\caption{A code pattern simplifiable by instruction combine (NIR code)}
 	\label{fig:ic}
 \end{figure}
 
@@ -393,25 +395,63 @@ This gives us a metric that takes into account how reduceable the code actually 
 
 \subsubsection*{Touched methods}
 
-One other way to think about the changes the optimizations added have on the codebase is to see how many methods it affects, and out of these, what is the code reduction. This may give more insight on the effect had.
+One other way to think about the changes the optimizations added have on the codebase is to see how many methods it affects, and out of these, what is the code reduction. This is also useful to show the impact of the very few passes that do not reduce the code size (e.g \scala{UnitSimplification}).
+
+We use this criterion to derive another metric, which is the proportion of reduced code among the touched methods. This will allow us to compare the performance of passes that have the same raw reduction, but behave very differently : they either touch a lot of methods and have small changes on all of them, or touch very few, but have a big impact on these.
 
 % add std-dev for code reduction out of touched methods
 
 \subsection{Observed results}
 
-We show here the results observed on the code base described in \ref{codebase}. We talk mostly about code reduction, but also show briefly the variations in executable size, compilation time and execution time.
+We show here the results observed on the code base described in \ref{codebase}, in terms of code reduction, using the metrics discussed above.
 
-\subsubsection{Code reduction}
+\begin{table}
+	\centering
+	\begin{tabular}{| l | r | r | r | r |}
+\hline
+                  & Raw         & Optimizeable & Touched     & Out of touched \\ \hline
+GlobalValueNumbering & \perf{0.47} & \perf{0.99}  & \perf{5.66} & \perf{2.13} \\ \hline
+UnitSimplification & \perf{0} & \perf{0}  & \perf{7.55} & \perf{0} \\
+CfChainsSimplification & \perf{4.26} & \perf{8.94}  & \perf{4.74} & \perf{20.97} \\
+BasicBlocksFusion & \perf{0.91} & \perf{1.91}  & \perf{5.11} & \perf{4.33} \\
+BlockParamReduction & \perf{0} & \perf{0}  & \perf{0.52} & \perf{0} \\ \hline
+Canonicalization & \perf{0} & \perf{0}  & \perf{0.98} & \perf{0} \\
+ConstantFolding & \perf{0.04} & \perf{0.07}  & \perf{0.23} & \perf{2.22} \\
+PartialEvaluation & \perf{0.06} & \perf{0.12}  & \perf{0.4} & \perf{2.24} \\
+InstCombine & \perf{0.1} & \perf{0.21}  & \perf{0.79} & \perf{2.72} \\ \hline
+All combined & \perf{6.46} & \perf{13.35}  & \perf{13.28} & \perf{22.07} \\ 
+\hline
+	\end{tabular}
+	\caption{Code reduction achieved by each pass}
+	\label{restable}
+\end{table}
+
+Table \ref{restable} shows the measurement for all the individual passes, tested in isolation, as well as the results when we put all the optimization phases one after the other, in the order described in this report (except \scala{GlobalValueNumbering}, which comes last). The placement of passes is described more in detail in the next section.
+
+We can clearly see here that \scala{CfChainsSimplification} is an outlier, in terms of code reduction. That is because it is fairly easy to simplify the simple, yet very verbose control flow graph that is outputted by the first phases of the compiler. For example, the pattern shown in Figure \ref{fig:cfc} happens very often : once for every \scala{if} that doesn't have an \scala{else}. On top of reducing the code size, this kind of simplification is good for runtime performance and other analyses of the code, because we have a simpler control flow, with less branching.
+
+Global value numbering and blocks fusion give convincing results. Static code optimizations are in general very hard, because of the limited amount of information accessible. On top of that, one has to be very careful not to change the semantics of the original program. Therefore, these kinds of optimizations have a limited impact, except if the code base or the previous phases have specific recurring patterns (as in \scala{CfChainsSimplification}. Between 1 and 2\% (optimizeable) code reduction is in the bounds of results that are found to be satisfactory in the litterature.
+
+Now, one can also see that the impact of the pattern-based optimizations, as well as constant folding, is very limited. They touch very few methods, and change only a couple of lines in each of these (1 out of 50). This can be expected for high-level languages like Scala, because constants are pretty rare. Good code practice encourages the use of parameters and defined constants, thus "hardcoding" of values happens very rarely, leading to poor optimization performances for passes that require statically known values. Note that the most applied patterns in these are actually produced by the earlier phases of the compiler.
+
+The number of methods touched help us measure the impact of non-code reducing optimizations. This is important when we put everything together, because these phases help the other phases find suitable patterns, leading to improved code reduction overall.  For the same reason as explained above, the canonicalization phase and the block parameter reduction trigger rarely. On the other hand, unit simplification happens a lot : it applies in 1 out of 13 methods. This is very useful because it reduces the passing of arguments in the control flow, which, for \scala{Unit}, is not optimized very well by LLVM, but also reduces the number of parameters that some basic blocks have. This simplifies the conditions for the control flow based optimizations, leading to more code reduction.
+
+When we test all the phases together, we get a result that is slightly greater than the sum of the separate passes (\perf{13.35} vs \perf{12.24} on optimizeable code). This is due to the interconnection of the phases, simplifications incurring other simplifications.
 
 
+\subsection{Pipeline integration}
 
-\subsubsection{Other impacts}
+In the previous section, we showed the code reduction for the implemented passes, without complete integration into the compiler pipeline. We discuss here what changes, and how / where to place the passes. Note that the compilation here is not done on the codebase anymore, as we need information from the linker here. We compile on our set of benchmarks instead, derived from the Scala-JS benchmarks \cite{scalajsbench}. It has a total of 7136 lines of Scala code, resulting in 93323 lines of NIR.
+
+\subsection{Other impacts}
 
 % executable size difference !
 
 % passes are before lowering phases
 
 % talk about the previous optimizations (DCE, boxing elimination, copy propagation)
+
+% compile without the reporter !!
 
 \section{Future work}
 
@@ -428,6 +468,8 @@ We show here the results observed on the code base described in \ref{codebase}. 
 	\bibitem{ssabook} SSA book
 	
 	\bibitem{llvm} LLVM compiler passes \newline \url{http://llvm.org/docs/Passes.html}
+
+	\bibitem{scalajsbench} Scala JS benchmark \newline \url{https://github.com/sjrd/scalajs-benchmarks}
 
 \end{thebibliography}
 
