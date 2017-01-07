@@ -41,7 +41,7 @@ object AssessPerformance {
       (pass.Canonicalization        -> default),
       (pass.ConstantFolding         -> default),
       (pass.PartialEvaluation       -> (default :+ pass.Canonicalization)),
-      (pass.InstCombine             -> (default :+ pass.Canonicalization)),  // TODO : special treatment, reorder code as in CFG (could add it above)
+      (pass.InstCombine             -> (default :+ pass.Canonicalization :+ pass.CFGOrdering)),
       (pass.GlobalValueNumbering    -> default)
     )
 
