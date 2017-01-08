@@ -22,21 +22,19 @@ object Driver {
   def apply(config: tools.Config): Driver =
     new Impl(
       Seq(
+        pass.GlobalBoxingElimination,
         pass.UnitSimplification,
+        pass.DeadCodeElimination,
         pass.CfChainsSimplification,
         pass.BasicBlocksFusion,
         pass.BlockParamReduction,
         pass.CopyPropagation,
-        pass.GlobalBoxingElimination,
         pass.Canonicalization,
         pass.ConstantFolding,
         pass.PartialEvaluation,
         pass.CFGOrdering,
         pass.InstCombine,
-        pass.CopyPropagation,
         pass.GlobalValueNumbering,
-        pass.CopyPropagation,
-        pass.DeadCodeElimination,
         pass.MainInjection,
         pass.ExternHoisting,
         pass.ModuleLowering,
