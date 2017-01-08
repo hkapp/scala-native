@@ -443,6 +443,18 @@ When we test all the phases together, we get a result that is slightly greater t
 
 In the previous section, we showed the code reduction for the implemented passes, without complete integration into the compiler pipeline. We discuss here what changes, and how / where to place the passes. Note that the compilation here is not done on the codebase anymore, as we need information from the linker here. We compile on our set of benchmarks instead, derived from the Scala-JS benchmarks \cite{scalajsbench}. It has a total of 7136 lines of Scala code, resulting in 93323 lines of NIR.
 
+Passes placement is in general a very hard problem. Because some phases may create opportunities for other, but also potentially remove some opportunities, this is non trivial. Some placement invariants are relatively simple to figure out (for example, canonicalization needs to be done before partial evaluation and instruction combine). Apart from that, heuristics are hard to find because of all the intricacies of the different passes. Automatic placement has been tested, but no improvement could be achieved.
+
+However, two things can increase the total code reduction. One is to try to place the optimization before or after the lowering phases of the compiler (or both). The other thing to do is what we will call \textit{knowledge propagation}, i.e. use copy propagation and dead code elimination extensively between the passes.
+
+First, let's consider the placement of the optimizations in the compilation pipeline. One could argue that placing them before is a good idea, because the code is still high-level, and Scala code patterns can be found and eliminated here. But one can also argue for the opposite, i.e. placing the optimizations at the end of the pipeline, because the code transformations used for lowering also exhibits patterns that are easy to simplify. Because there are arguments for (and against) the two, both have to be tested. We also test both at the same time, and analyze the impact on the compilation time in the next section. Finally, we try, for each pass, if it should be before or after the lowering phases. This will give (hopefully) a good trade-off between compilation time and code reduction.
+
+We also try \textit{knowledge propagation}, which consists in eliminating \nir{copy} instructions and dead code as soon as possible. The fact that code is not really removed in any optimization pass, but replace by \nir{copy} instruction is easier to write and verify (because the variable is still there). However, this also blocks optimizations opportunities, because it doesn't reflect the fact that the value of some variables is statically known. The same is true with dead code, except for the fact that it is not known at that time that some variables become dead after optimization. The idea here will be to add copy propagation and dead code elimination between almost all of the passes. This increases the compilation time, and is discussed in the next section.
+
+
+
+Results for all the variants of the pipeline discussed are shown in Figure \ref{}.
+
 \subsection{Other impacts}
 
 % executable size difference !

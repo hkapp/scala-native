@@ -12,7 +12,7 @@ find_bounds() {
 }
 
 measure() {
-  sbt benchmarks/run > /dev/null
+  sbt benchmarks/nativeLink > /dev/null
 
   if [ -z $output ]
   then

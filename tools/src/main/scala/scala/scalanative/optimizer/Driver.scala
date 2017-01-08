@@ -32,7 +32,6 @@ object Driver {
         pass.Canonicalization,
         pass.ConstantFolding,
         pass.PartialEvaluation,
-        pass.CFGOrdering,
         pass.InstCombine,
         pass.GlobalValueNumbering,
         pass.MainInjection,
