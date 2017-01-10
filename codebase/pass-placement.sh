@@ -46,6 +46,8 @@ cd $repo
 find_bounds
 echo "Start at $startln, end at $endln"
 
+sbt benchmarks/clean > /dev/null
+
 measure
 echo "Starting with $loc lines"
 best=$loc

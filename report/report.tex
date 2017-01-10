@@ -441,7 +441,7 @@ When we test all the phases together, we get a result that is slightly greater t
 
 \subsection{Pipeline integration}
 
-In the previous section, we showed the code reduction for the implemented passes, without complete integration into the compiler pipeline. We discuss here what changes, and how / where to place the passes. Note that the compilation here is not done on the codebase anymore, as we need information from the linker here. We compile on our set of benchmarks instead, derived from the Scala-JS benchmarks \cite{scalajsbench}. It has a total of 7136 lines of Scala code, resulting in 93323 lines of NIR.
+In the previous section, we showed the code reduction for the implemented passes, without complete integration into the compiler pipeline. We discuss here what changes, and how / where to place the passes. Note that the compilation here is not done on the codebase anymore, as we need information from the linker here. We compile on our set of benchmarks instead, derived from the Scala-JS benchmarks \cite{scalajsbench}. It has a total of 7136 lines of Scala code, resulting in 105392 lines of NIR.
 
 Passes placement is in general a very hard problem. Because some phases may create opportunities for other, but also potentially remove some opportunities, this is non trivial. Some placement invariants are relatively simple to figure out (for example, canonicalization needs to be done before partial evaluation and instruction combine). Apart from that, heuristics are hard to find because of all the intricacies of the different passes. Automatic placement has been tested, but no improvement could be achieved.
 
@@ -451,11 +451,19 @@ First, let's consider the placement of the optimizations in the compilation pipe
 
 We also try \textit{knowledge propagation}, which consists in eliminating \nir{copy} instructions and dead code as soon as possible. The fact that code is not really removed in any optimization pass, but replace by \nir{copy} instruction is easier to write and verify (because the variable is still there). However, this also blocks optimizations opportunities, because it doesn't reflect the fact that the value of some variables is statically known. The same is true with dead code, except for the fact that it is not known at that time that some variables become dead after optimization. The idea here will be to add copy propagation and dead code elimination between almost all of the passes. This increases the compilation time, and is discussed in the next section.
 
+\begin{figure}
+	\includegraphics[width=1.15\textwidth]{images/integration-side.png}
+	\caption{Comparison of the different placement for the optimizations (\textit{Before} and \textit{After} the lowering phases), as well as with or without knowledge propagation (\textit{KP}). For compilation time, we give the average over 10 runs as well as sandard deviation. The ratio, given in lines of code per second, is computed as $\frac{code\ reduction}{t - t_{ref}}$}
+	\label{fig:pipinteg}
+\end{figure}
 
+Results for all the variants of the pipeline discussed are shown in Figure \ref{fig:pipinteg}. We can see that the performance is better if we perform optimization before lowering (more code reduction, and less compilation time). The change in compilation time is mostly due to the handling of a more complex CFG, with more nodes and more branching. The code reduction improvement validates the argument that the optimizations should be performed before lowering because of the code being high-level, allowing the finding of patterns and gathering of information to be much simpler.
 
-Results for all the variants of the pipeline discussed are shown in Figure \ref{}.
+We can also see that adding knowledge propagation only improves the results by a small amount (\perf{6.5} on average), but increases the compilation time substantially (\perf{+31.5} on average). The best system overall for code reduction, without taking into account the added compilation time, is obviously the one that has both optimizations before and after lowering phases, plus knowledge propagation. However, if we look for a good trade-off, then we can look at the \textit{ratio} shown on the graph : it gives the number of code lines removed per added second of compilation time. They are all relatively low (between 355 and 580 LOC/sec), except for the very first pipeline, which achieves 2050 LOC/sec. This is due to an almost optimal code reduction (\perf{86} of the optimal), with only \perf{20.5} added compilation time. We therefore use this specific placement in the real compiler.
 
 \subsection{Other impacts}
+
+We discussed in earlier sections code reduction, which was the main goal for this project, and also compilation time, which, although not a major goal, is important to keep low for performance of the compiler. We now talk about other impacts of the added optimizations, namely final executable code, which will show the LLVM optimizations that were enabled, and execution time.
 
 % executable size difference !
 
@@ -469,6 +477,8 @@ Results for all the variants of the pipeline discussed are shown in Figure \ref{
 
 
 \section{Conclusion}
+
+\section*{Acknowledgements}
 
 
 \begin{thebibliography}{9}
