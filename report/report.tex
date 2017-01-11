@@ -1,4 +1,4 @@
-\documentclass[11pt,a4paper]{article}
+\documentclass[12pt,a4paper]{article}
 
 \usepackage[utf8]{inputenc}
 \usepackage[english]{babel}
@@ -17,14 +17,24 @@
 \usepackage{color}
 \usepackage{pgfplots}
 
-\lstset{
+\setlength{\parskip}{1mm}
+
+\lstdefinestyle{scalasnp}{
 	language=Scala,
 	keywordstyle=\color{blue},
+	frame = single,
+	commentstyle=\color{black}
+}
+
+\lstdefinestyle{nirsnp}{
+	language=sh,
+	keywordstyle=\color{orange!50!red},
 	frame = single
 }
 
 \author{Hugo Kapp 227942}
-\title{Semester project report}
+\title{Optimizations in the Scala Native compiler \newline \Large{Semester project report}}
+\date{}
 
 \newcommand{\scala}[1]{\textsf{#1}}
 \newcommand{\nir}[1]{\texttt{#1}}
@@ -36,37 +46,53 @@
 
 \section{Introduction}
 
-We explain in this report all that was done during this semester project : the goals, the ideas and results achieved. We give in this section insights about why this project is important, as well as the ground we start with. We then give the details of each optimization that is implemented, and pointers to their correctness.
+We explain in this report what I have done during this semester project at LAMP, during the Fall semester 2016. We first explain what is the goal of this project, and why it important. We then describe briefly the specificities of the Scala Native compiler, focusing on ints intermediate representation (NIR). After this, we give the details of each optimization that was implemented. In section \ref{resultssection} we show the results observed over the codebase. After that, we briefly discuss what could be done in the future, before concluding.
 
 \subsection{Motivation}
 
-In recent compilers, compilation speed is an issue. This is particularly important in Scala compilers, because the richness of the language is hard to resolved automatically. The process is therefore slower than for other languages. For ScalaNative, this problem is worsened by the long compilation time of LLVM, which is relatively slow when applied to big files. Because there is no dynamic linking in ScalaNative, all symbols and definitions that can be reached during the execution of the program are statically linked during compilation. This leads to a very big program that needs to go through the whole compilation pipeline, even for very small input programs.
+Because the goal of the Scala Native compiler is to produce binary executables from Scala source files, there can be no dynamic linking. This means that the techniques used in the JVM for late linking, i.e. loading classes when they are needed, at execution time, cannot be used. In Scala Native, the linking is done statically, and all the classes and methods that could be used during the execution are identified, then loaded at compile time.
 
-All of this makes the ScalaNative compiler very slow, and produces huge executables.
+This leads to very big programs that have to go through the whole compilation pipeline, making the compilation process slow, and outputting big LLVM source files. These are then compiled to large binary executables, containing portions of code that might never be used. The LLVM compilation of big files being slow, this slows down the compilation process even further. 
+
+%In recent compilers, compilation speed is an issue. This is particularly important in Scala compilers, because the richness of the language is hard to resolve automatically. The process is therefore more complex, and thus, slower than for other languages.
+
+%For ScalaNative, this problem is worsened by the long compilation time of LLVM, which is relatively slow when applied to big files. Because there can be no dynamic linking in ScalaNative, all symbols and definitions that can be reached during the execution of the program are statically linked during compilation. This produces very big programs that needs to go through the whole compilation pipeline.
+
+%All of this makes the ScalaNative compiler very slow, and produces huge executables.
 
 \subsection{Goal}
 
-The goal of this project is therefore to reduce the amount of code worked with, through various optimizations. We could let the LLVM compiler take care of all of this, as it has a very efficient optimization pipeline. The idea here is to take advantage of the domain-specific knowledge we have, before it is lost due to primitives lowering to LLVM. On top of that, having less code to perform the passes on should speed up the compilation.
+The goal of this project is to reduce the amount of code worked with, through various optimizations. We could let the LLVM compiler take care of this, as it has a very efficient optimization pipeline. The idea here is to take advantage of the domain-specific knowledge we have, like Scala semantics or code patterns, before it is lost due to primitives lowering to LLVM.
 
-The only goal here is code reduction, and not execution speed. Any reduction in the final size of the executable, as well as compilation or execution speed-up, in totally incidental, but will still be noted.
+Because other metrics are hard to guarantee, measure and reason about, the only goal here will be code reduction. Reduction in the final size of the executable, compilation time or execution time is totally incidental, although always desirable.
 
-\subsection{The ScalaNative compiler}
+\section{The Scala Native compiler}
 
-Before we start explaining the various optimizations implemented and their impact, we first need to talk a little bit about the compiler organization and specific. Only what is necessary is explained here, and kept abstract. For more details on the compiler, please refer to the documentation in \cite{nativedoc}.
+% talk about the previous optimizations (DCE, boxing elimination, copy propagation)
 
-\subsection*{Compiler organization}
+Before we start explaining the various optimizations implemented and their impact, we first need to talk a little bit about the compiler organization and specifics. Only what will be necessary to understand the optimizations and the reason why they work is explained here, and kept abstract. For more details on the compiler, please refer to the documentation in \cite{nativedoc}.
 
-The compiler is organized as a classic pipeline consisting of a sequence of \scala{Pass}.  For this project, we only add passes to the compilation pipeline, which will alter the current form of the code.
+\subsection{General organization}
 
-\subsubsection*{Native Intermediate Representation}
+The Scala Native compiler is a Scala compiler that outputs binary executables. It does so by using the LLVM language and compiler, a very powerful and broadly used cross-platform low level language, close to assembly \cite{llvmlang}.
 
-Scala Native uses its own intermediate representation (IR), called \textit{Native Intermediate Representation} and abbreviated NIR.
+The compiler is organized as a classic pipeline. After the front-end extracts the AST from the Scala source files, it goes through a sequence of lowering phases (called passes), which transforms the high-level constructs from Scala into low-level LLVM constructs, closer to assembly.
 
-It is in SSA form, which stands for \textit{Static Single Assignment}. This means that variables have only one static definition in the program, which can be performed multiple times during execution. Different values can then be merged to define a new variable, using the concept of $\phi$-functions that can be found in the litterature (see \cite{ssabook}). In NIR, classic $\phi$-functions are replaced by arguments passed to each basic block.
+For this project, we only add passes to the compilation pipeline, which will alter the current form of the code.
 
-The instruction set of NIR is composed of a subset of LLVM operations, with the same semantics, plus some high-level constructs coming from Scala. The latter are lowered during the compilation process to be expressed in terms of LLVM instructions.
+\subsection{Native Intermediate Representation}
 
-Further details about NIR can be found in \cite{nirdoc}.
+Scala Native uses its own intermediate representation (IR), called \textit{Native Intermediate Representation} and abbreviated NIR. This is the only form of the program on which we will work during this project.
+
+The instruction set of NIR is composed of a subset of LLVM operations, with the same semantics, plus some high-level constructs coming from Scala (e.g. class definition, method dispatch, boxing...). The latter are lowered during the compilation process to be expressed in terms of LLVM instructions only.
+
+Like LLVM, NIR uses the concept of \textit{basic blocks}, which is defined as a portion of purely sequential code. This means that the control flow cannot enter, nor exit in the middle of a basic block. In NIR, each basic block has a name and starts with a label, which defines the name of the block, as well as its parameters, and ends with a control flow instruction, which branches (potentially conditionaly) to another basic block using its name. For a given code, we then define the \textit{Control Flow Graph} (abbreviated CFG) as the directed graph whose nodes are the basic block of the program, with an edge going from block $n_1$ to $n_2$ if the control flow instructions of $n_1$ can branch to $n_2$. 
+
+NIR programs are in SSA form (as is LLVM), which stands for \textit{Static Single Assignment}. This means that variables have only one static definition in the program. Note that this definition can be performed multiple times during the execution. Different values can then be merged to define a new variable, using the concept of $\phi$-functions that can be found in the litterature (see \cite{ssabook}). In NIR, classic $\phi$-functions are replaced by arguments passed to each basic block. Like in Scala, variables must be defined before their use.
+
+% add a simple example !! for merging
+
+All basic blocks, variables and control flow graphs are local to a given method, which are treated as complete programs, independent of each other. For the purpose of this report, we will write some basic NIR code, but won't bother with specific syntax of the language. However, we will keep the way variables are written, starting with a '\nir{\%}', e.g. \nir{\%a}. Further details about NIR can be found in \cite{nirdoc}.
 
 \section{Global Value Numbering}
 
@@ -83,9 +109,9 @@ The idea is taken directly from \cite{ssabook}, which also provides a proof of c
 
 The first condition is very simple to understand, but the second might seem more complex. It can be explained using the example in Figure \ref{fig:gvn}. In \ref{fig:gvn1}, the computation \scala{a + 1} is not necessarily done when we reach the definition of \scala{c}. In \ref{fig:gvn2}, the result has already been computed when we reach the definition for \scala{b}, so we can avoid the re-computation of \scala{a + 1}.
 
-\begin{figure}[h]
+\begin{figure}
 	\begin{subfigure}{0.5\textwidth}
-		\begin{lstlisting}
+		\begin{lstlisting}[style=scalasnp]
 if (...) {
   val b = a + 1
   ...
@@ -97,7 +123,7 @@ val c = a + 1
 	\end{subfigure}
 	\quad
 	\begin{subfigure}{0.5\textwidth}
-		\begin{lstlisting}
+		\begin{lstlisting}[style=scalasnp]
 val c = a + 1
 if (...) {
   val b = a + 1
@@ -201,9 +227,9 @@ The original CFG produced by the compiler is very simple. For any control-flow b
 For example, take the code in Figure \ref{fig:cfc} and its (simple) CFG. Because there is no "else" part to the "if", we could already jump to the block \nir{\%src.5} without going through \nir{\%src.4} if the condition is not met.
 % This goal CFG is shown in \ref{fig:cfc:cfg2}.
 
-\begin{figure}[h]
+\begin{figure}
 	\begin{subfigure}{0.5\textwidth}
-		\begin{lstlisting}
+		\begin{lstlisting}[style=scalasnp]
 if (...) {
   println(..)
 }
@@ -226,6 +252,7 @@ if (...) {
 
 To solve the kind of problems explained above, we add a new pass to the compiler, called \scala{CfChainsSimplification}. Its goal is to simplify the control flow using global CFG informations, and in particular to solve these simple control-flow chains, where a block is only comprised of a single control-flow instruction. We use the following rules for simplification :
 
+\begin{figure}
 $$ \frac{\nir{\%a(\%b..): Cf}}{\nir{jump \%a(\%c..)} \longrightarrow \nir{Cf} \  | \  \{\nir{\%b..} \rightarrow \nir{\%c..}\}} $$
 
 $$ \nir{if true then \%a(\%b..) else \%c(\%d..)} \longrightarrow \nir{jump \%a(\%b..)} $$
@@ -239,8 +266,13 @@ $$ \nir{switch \%a \{ default: \%b \} } \longrightarrow \nir{jump \%b} $$
 $$ \frac{\nir{\%a = \%b}_i}{\nir{switch \%a \{ cases \%b..: \%c.. ; default: \%d \} } \longrightarrow \nir{jump \%c}_i} $$
 
 $$ \frac{\nir{jump \%c}_i \longrightarrow^* \nir{jump \%c'}_i \quad \nir{jump \%d} \longrightarrow^* \nir{jump \%d'}}{\splitfrac{\nir{switch \%a \{ cases \%b..: \%c.. ; default: \%d \} }}{\longrightarrow \nir{switch \%a \{ cases \%b..: \%c'.. ; default: \%d \} }}} $$
+\centering
+\end{figure}
+\hspace{2mm}
 
-Where \nir{Cf} is any single control-flow instruction.
+\textit{Where} \nir{Cf} \textit{is any single control-flow instruction.}
+
+\hspace{2mm}
 
 The pass does fixpoint iterations on each control-flow instruction, following the rules above, until convergence for this instruction has been reached. This is particularly useful when the control flow chains are rather long, and static information is carried along (for example a \nir{jump true} that jumps to an \nir{if} can directly be reduced).
 
@@ -318,15 +350,15 @@ We add yet another pass to the compiler, called \scala{PartialEvaluation}. It is
 
 \subsubsection*{Idea}
 
-The idea for this optimization is inspired by the LLVM pass called \scala{InstCombine} \cite{llvm}. Relatively close to partial evaluation, this pass goes further and simplifies patterns that use knowledge about variable definitions. It is therefore able to capture patterns that span mutliple instructions.
+The idea for this optimization is inspired by the LLVM pass called \scala{InstCombine} \cite{llvmpasses}. Relatively close to partial evaluation, this pass goes further and simplifies patterns that use knowledge about variable definitions. It is therefore able to capture patterns that span mutliple instructions.
 
 \subsubsection*{InstCombine}
 
 We add a pass called \scala{InstCombine}. Its role is to simplify multi-instructions patterns in the code. Very close to partial evaluation, it is however distinct, because it deals with much more involved patterns, and doesn't require the operands to have statically known values. It uses the operation defining its variable operands to perform optimizations.
 
-\begin{figure}[h]
+\begin{figure}
 	\begin{subfigure}{0.5\textwidth}
-		\begin{lstlisting}
+		\begin{lstlisting}[style=nirsnp]
 %a = ...
 %b = xor %a, true
 if %b then %c else %d
@@ -335,7 +367,7 @@ if %b then %c else %d
 	\end{subfigure}
 	\quad
 	\begin{subfigure}{0.5\textwidth}
-		\begin{lstlisting}
+		\begin{lstlisting}[style=nirsnp]
 %a = ...
 %b = xor %a, true
 if %a then %d else %c
@@ -346,7 +378,7 @@ if %a then %d else %c
 	\label{fig:ic}
 \end{figure}
 
-An example that occurs a lot in the produced code is shown in Figure \ref{fig:ic}. The \nir{xor} with the value \nir{true} is used to negate a boolean value, as LLVM doesn't have a negation opertator. This code is the result of a simple \scala{if (!a)} expression in the original scala code. We can avoid computing the intermediate value \nir{\%b} by simply switching the branching destinations. Note that the optimized version of the code does not get rid of the definition for \nir{\%b}. This is because it could be used somewhere else in the code, although this is unlikely. Anyway, it will be cleaned up by the dead code elimination pass if possible.
+An example that occurs a lot in the produced code is shown in Figure \ref{fig:ic}. The \nir{xor} with the value \nir{true} is used to negate a boolean value, as LLVM doesn't have a negation opertator. This code is the result of a simple '\scala{if (!a)}' expression in the original scala code. We can avoid computing the intermediate value \nir{\%b} by simply switching the branching destinations. Note that the optimized version of the code does not get rid of the definition for \nir{\%b}. This is because it could be used somewhere else in the code, although this is unlikely. Anyway, it will be cleaned up by the dead code elimination pass if possible.
 
 The criteria for reducing code is thus more complex than the one used in the last section. Here, on top of reducing instructions to simpler ones, we can also reduce the number of variable used. This may lead to some variables being reomved by DCE, which eventually reduces the code size. 
 
@@ -356,6 +388,8 @@ The criteria for reducing code is thus more complex than the one used in the las
 % add examples everywhere !
 
 \section{Results}
+
+\label{resultssection}
 
 We discuss in this section the impact the optimizations mentioned in the above sections had.
 
@@ -467,19 +501,33 @@ We discussed in earlier sections code reduction, which was the main goal for thi
 
 % executable size difference !
 
-% passes are before lowering phases
-
-% talk about the previous optimizations (DCE, boxing elimination, copy propagation)
-
 % compile without the reporter !!
+
+% give the specs fo the CPU
 
 \section{Future work}
 
+Static optimizations is a never-ending work. There are always patterns to add, new patterns added by other changes to the compiler, opportunities emerging from the combination of multiple phases ... However, some new optimization might have a big potential of code reduction.
+
+First of all, inlining would be very interesting. Because the optimizations added use static local knowledge that is derived from the code, inlining methods would allow the knowledge about the parameters to "transfer" to the method implementation. Also, because of the way Scala code is written, i.e. typically with a lot of very small methods, with simple control-flow, the overhead of inlining in terms of added code can quickly be overcome	 by the simplifications that arise and the removal of a method call. However, this can't be applied to virtual methods, which happen to have a lot of methods that return constant, statically-known values. On top of that, good criteria to decide which methods to inline, and when to stop inlining are hard to devise.
+
+One other optimization that could produce good results is the family of optimizations called "code motion". Their goal is to move code around, in order to execute instructions as soon as possible, if we know that we will compute them, or as late as possible, if thy might not be useful right away. One example is partial redundancy elimination, which, close to global value numbering (which is a full redundancy elimination method), tries to share values that are computed and used in various branches. This kind of optimizations i really hard in general, but some basic version could help a lot. By looking at the NIR code, one can see plenty of basic blocks that do the exact same thing, except for a variable name being different (or some value say). These blocks could be merged together, and a block parameter added to reduce the code (at the cost of potentially lost information for other passes). Also, there are many blocks with a conditional branch, for which all the children perform the same first instructions. Here, we could move this code in the current block, and perform branching later. However, these are hard to implement, and it is not easy to find good ways to find which code can be moved, and even harder to say if it should be moved.
+
+% individual pass tests for correctness
 
 \section{Conclusion}
 
+During this project, many optimizations for NIR code have been implemented. It has later been shown that they produce convincing results in terms of code reduction, without slowing the compilation process very much.
+
+We have seen that optimizations that have domain-specific knowledge, either through higher-level instructions or using specific patterns produced by the earlier phases, are the ones that reduce the code the most. On the other hand, very general-purpose optimizations, that are not very compiler or language specific, perform poorly (e.g. \scala{InstCombine}, \scala{PartialEvaluation}). This goes to show that the code that needs to be optimized must be known before thinking about which optimizations to implement.
+
 \section*{Acknowledgements}
 
+I would like to thank Martin Odersky for letting me the opportunity to do a semester project in his renowned lab, and in the very specific domain of compilers.
+
+I would also like to thank Denys Shabalin for his deep interest in research and the help he provided me throughout this project.
+
+I would also like to thank Doeraene Sébastien for his incredible knowledge about Scala compilers, and providing us with help, ideas and experience from his own Scala-JS project.
 
 \begin{thebibliography}{9}
 
@@ -489,7 +537,9 @@ We discussed in earlier sections code reduction, which was the main goal for thi
 	
 	\bibitem{ssabook} SSA book
 	
-	\bibitem{llvm} LLVM compiler passes \newline \url{http://llvm.org/docs/Passes.html}
+	\bibitem{llvmlang} LLVM language reference \newline \url{http://llvm.org/docs/LangRef.html}	
+	
+	\bibitem{llvmpasses} LLVM compiler passes \newline \url{http://llvm.org/docs/Passes.html}
 
 	\bibitem{scalajsbench} Scala JS benchmark \newline \url{https://github.com/sjrd/scalajs-benchmarks}
 

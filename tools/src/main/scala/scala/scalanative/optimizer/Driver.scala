@@ -42,6 +42,8 @@ object Driver {
         //pass.CopyPropagation,
         //pass.DeadCodeElimination,
         //pass.GlobalValueNumbering,
+        //pass.CopyPropagation,
+
         pass.UnitSimplification,
         pass.DeadCodeElimination,
         pass.CfChainsSimplification,
@@ -54,6 +56,7 @@ object Driver {
         pass.InstCombine,
         pass.GlobalBoxingElimination,
         pass.GlobalValueNumbering,
+
         pass.MainInjection,
         pass.ExternHoisting,
         pass.ModuleLowering,
@@ -72,6 +75,7 @@ object Driver {
         pass.TryLowering,
         pass.AllocLowering,
         pass.SizeofLowering,
+
         //pass.CopyPropagation,
         //pass.DeadCodeElimination,
         //pass.UnitSimplification,
@@ -94,6 +98,7 @@ object Driver {
         //pass.CopyPropagation,
         //pass.DeadCodeElimination,
         //pass.GlobalValueNumbering,
+
         pass.CopyPropagation,
         pass.DeadCodeElimination
       ))
